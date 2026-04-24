@@ -488,7 +488,7 @@ body.dark ::-webkit-scrollbar-thumb{background:#44423c;}
 </div>
 
 <!-- Share modal -->
-<div class="modal-overlay" id="share-modal-overlay" onclick="closeShareModalBg(event)" style="display:none">
+<div class="modal-overlay" id="share-modal-overlay" onclick="closeShareModalBg(event)">
   <div class="modal">
     <h2 id="share-modal-title">Share list</h2>
     <div id="share-members-list" style="margin:12px 0;min-height:32px;"></div>
@@ -997,12 +997,12 @@ async function openShareModal() {
   document.getElementById('share-modal-title').textContent = `Share "${list.name}"`;
   document.getElementById('share-add-input').value = '';
   document.getElementById('share-error').textContent = '';
-  document.getElementById('share-modal-overlay').style.display = 'flex';
+  document.getElementById('share-modal-overlay').classList.add('open');
   await refreshShareMembers();
 }
 
 function closeShareModal() {
-  document.getElementById('share-modal-overlay').style.display = 'none';
+  document.getElementById('share-modal-overlay').classList.remove('open');
   shareListId = null;
 }
 
