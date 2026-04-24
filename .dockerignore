@@ -1,0 +1,14 @@
+venv/
+.git/
+__pycache__/
+*.pyc
+.env
+*.db
+*.db-wal
+*.db-shm
+tests/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.claude/
+=2.0

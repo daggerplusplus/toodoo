@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toodoo — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#f5f4f0;
+  --card-bg:#ffffff;
+  --border:#e5e4e0;
+  --text:#1a1917;
+  --muted:#8a8880;
+  --accent:#4f7ef8;
+  --danger:#ef4444;
+  --sans:'Plus Jakarta Sans',sans-serif;
+  --radius:14px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1a1917;
+    --card-bg:#222120;
+    --border:#38362f;
+    --text:#f0ede8;
+    --muted:#9a9488;
+  }
+}
+body{
+  font-family:var(--sans);background:var(--bg);color:var(--text);
+  min-height:100dvh;min-height:100vh;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.card{
+  background:var(--card-bg);border:1px solid var(--border);
+  border-radius:var(--radius);padding:36px 32px;
+  width:100%;max-width:360px;
+  box-shadow:0 8px 32px rgba(0,0,0,.08);
+}
+.logo{
+  display:flex;align-items:center;gap:10px;
+  font-size:20px;font-weight:600;letter-spacing:-0.4px;margin-bottom:28px;
+}
+.logo svg{opacity:.8;flex-shrink:0;}
+label{
+  display:block;font-size:12px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;
+}
+input[type=password]{
+  width:100%;padding:10px 12px;
+  font-family:var(--sans);font-size:14px;
+  border:1px solid var(--border);border-radius:8px;
+  background:var(--bg);color:var(--text);outline:none;
+  transition:border-color .12s,box-shadow .12s;
+}
+input[type=password]:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent);
+}
+.error{
+  font-size:13px;color:var(--danger);margin-bottom:16px;
+  padding:8px 12px;background:color-mix(in srgb,var(--danger) 10%,transparent);
+  border-radius:7px;display:none;
+}
+.error.visible{display:block;}
+button[type=submit]{
+  width:100%;margin-top:16px;padding:10px;
+  font-family:var(--sans);font-size:14px;font-weight:500;
+  background:var(--accent);color:#fff;border:none;border-radius:8px;
+  cursor:pointer;transition:background .12s;
+}
+button[type=submit]:hover{background:#3b6be0;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+    </svg>
+    Toodoo
+  </div>
+  <div class="error" id="error-msg">Incorrect username or password.</div>
+  <form method="post" action="/login">
+    <label for="un">Username</label>
+    <input type="text" id="un" name="username" autofocus autocomplete="username" required style="margin-bottom:12px">
+    <label for="pw">Password</label>
+    <input type="password" id="pw" name="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+  </form>
+  <p style="margin-top:16px;font-size:12px;color:var(--muted);text-align:center">
+    No account? Ask someone with access to invite you.
+  </p>
+</div>
+<script>
+  if (new URLSearchParams(location.search).get('error'))
+    document.getElementById('error-msg').classList.add('visible');
+</script>
+</body>
+</html>

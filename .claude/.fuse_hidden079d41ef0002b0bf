@@ -1,0 +1,73 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "statusMessage": "Scanning for secrets...",
+            "timeout": 30,
+            "command": "python3 /config/workspace/python/toodoo/scripts/scan_secrets.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "agent",
+            "if": "Edit(*web.py)|Edit(*db.py)|Write(*web.py)|Write(*db.py)",
+            "statusMessage": "Syncing MCP server...",
+            "timeout": 60,
+            "prompt": "A change was just made to this todo app. The changed file is in the hook input: $ARGUMENTS\n\nYour job is to check whether mcp_server.py needs to be updated to stay in sync.\n\n## What to look for\nAny of these in the changed file requires a matching update in mcp_server.py:\n- New route or deleted route\n- New, renamed, or removed query parameter on any existing route\n- New, renamed, or removed request body field\n- New or removed database column that tools read or write\n- Changed business logic (ordering, validation, defaults) that tools expose\n- Changed response shape\n\n## Steps\n1. Read the changed file (web.py or db.py) to understand exactly what changed.\n2. Read mcp_server.py to see its current state.\n3. For every change in the list above, update mcp_server.py to match: tool inputSchema, handler query/logic, and any helper functions.\n4. If mcp_server.py is already in sync, do nothing.\n\nOnly edit mcp_server.py. Do not touch any other files."
+          },
+          {
+            "type": "agent",
+            "if": "Edit(*web.py)|Edit(*db.py)|Edit(*mcp_server.py)|Write(*web.py)|Write(*db.py)|Write(*mcp_server.py)",
+            "statusMessage": "Updating unit tests...",
+            "timeout": 120,
+            "prompt": "A source file was just changed in this todo app. The raw hook input JSON is: $ARGUMENTS\n\nYour job is to keep the unit test suite up to date with complete coverage.\n\n## Step 0 — Parse the hook input\nThe text above is a JSON object. Extract:\n- `tool_input.file_path` — the file that was changed\n- `tool_input.new_string` (Edit) or `tool_input.content` (Write) — what was added or written\n\n## Step 1 — Find what changed\nRead the changed file at the path you extracted. Then scan for every `@app.` decorator (routes) and every public function. Make a list of every route/function that appears in the file.\n\n## Step 2 — Find what is tested\nRead the relevant test file in full:\n- web.py changed → read /config/workspace/python/toodoo/tests/test_web.py\n- db.py changed → read /config/workspace/python/toodoo/tests/test_db.py\n- mcp_server.py changed → read /config/workspace/python/toodoo/tests/test_web.py\n\nFor every route or function you listed in Step 1, search the test file for a `def test_` function that exercises it. If one does not exist, it is missing coverage.\n\n## Step 3 — Write missing tests\nFor every gap found in Step 2, add tests to the relevant test file. Required coverage per item:\n- New route: happy path (assert status + response shape) + every error case (404, 400, 422)\n- New query parameter: one test per valid value + one test for the default\n- Changed ordering: assert the exact order of IDs or titles in the response\n- New business rule: one test that directly exercises the rule\n- Deleted route or function: remove its tests\n\nDo not add tests that duplicate existing ones. Use `@pytest.mark.parametrize` for repetitive cases.\n\n## Step 4 — Verify\nAfter editing, run:\n```\ncd /config/workspace/python/toodoo && source venv/bin/activate && python -m pytest tests/ -q 2>&1\n```\nIf any tests fail, fix them before finishing.\n\n## Fixtures and style (copy this pattern)\n```python\n@pytest.fixture\ndef list_id(client):\n    r = client.post(\"/api/lists\", json={\"name\": \"Test List\"})\n    return r.json()[\"id\"]\n\ndef test_example(client, list_id):\n    r = client.post(f\"/api/lists/{list_id}/tasks\", json={\"title\": \"X\"})\n    assert r.status_code == 201\n```\nAvailable fixtures: `client` (FastAPI TestClient with initialised DB), `fresh_db` (function-scoped temp DB path), `tmp_db` (session-scoped temp DB path).\n\n## Constraints\n- Only edit files inside tests/. Do not touch source files.\n- No docstrings, no multi-line comment blocks, pytest not unittest.\n- If nothing is missing, do nothing."
+          },
+          {
+            "type": "agent",
+            "if": "Edit(*web.py)|Edit(*db.py)|Edit(*mcp_server.py)|Edit(*index.html)|Write(*web.py)|Write(*db.py)|Write(*mcp_server.py)|Write(*index.html)",
+            "statusMessage": "Updating documentation...",
+            "timeout": 120,
+            "prompt": "A source file was just changed in this todo app. The raw hook input JSON is: $ARGUMENTS\n\nYour job is to keep the docs/ directory accurate and useful — for both humans reading it and AI agents using it as context.\n\n## Step 0 — Parse the hook input\nThe text above is a JSON object. Extract:\n- `tool_input.file_path` — the absolute path of the file that was changed\n- `tool_input.new_string` (Edit) or `tool_input.content` (Write) — what was added or written\n\nIf you cannot parse the JSON or extract a file path, stop and do nothing.\n\n## Step 1 — Find what changed\nRead the full changed file at the path you extracted. Then build an inventory:\n- For web.py: list every `@app.` decorator with its HTTP method, path, and all parameters\n- For db.py: list every table column and every public function\n- For mcp_server.py: list every tool name and its inputSchema fields\n- For index.html: note any new UI features, state variables, or user-facing behaviours\n\n## Step 2 — Identify what needs updating\nFor each item in your Step 1 inventory, check whether it is accurately reflected in the relevant doc files:\n- New or removed route → api.md\n- New, changed, or removed query parameter → api.md (values, default, effect)\n- Changed ordering/sorting behaviour → api.md (Ordering section) + knowledge-graph.md (Behavioural Rules)\n- New or changed MCP tool or parameter → mcp-tools.md\n- New or changed database column → data-model.md\n- New or changed business rule or UI behaviour → knowledge-graph.md Behavioural Rules table\n- Architectural change → architecture.md\n\n## Step 3 — Verify completeness before writing\nFor web.py changes: grep for every `@app.` in web.py, then confirm each route appears in api.md. Fix any that are missing or stale.\nFor mcp_server.py changes: grep for every `\"name\":` in the tools list, then confirm each appears in mcp-tools.md.\nFor db.py changes: run `PRAGMA table_info()` mentally from the schema in db.py, then confirm data-model.md matches.\n\n## Step 4 — Update only affected doc files\nRead only the doc files identified in Step 2. Update them to reflect the current state of the code. Be precise — wrong docs are worse than no docs.\n\n## Documentation files\n- docs/api.md — REST API reference: every route, method, path, request body, query params, response shape, status codes\n- docs/architecture.md — Architecture overview with ASCII diagrams: entry points, module responsibilities, deployment, recurrence logic\n- docs/data-model.md — Full schema (columns, types, defaults, constraints), indexes, relationships, seed data, ordering query\n- docs/mcp-tools.md — MCP server tool reference: every tool, its input schema (field/type/required/default), output, and the test command\n- docs/knowledge-graph.md — Structured entity/relationship map for AI consumption: modules, tables, behavioural rules, file map\n\n## Constraints\n- Only write inside docs/. Do not touch source files or tests.\n- Keep existing document structure and heading hierarchy unless a restructure genuinely improves clarity.\n- The knowledge-graph.md Behavioural Rules table must be exhaustive — an AI reading only that file should understand the full system behaviour.\n- Do not pad docs with filler. Every sentence must be load-bearing.\n- If nothing in the docs is affected by the change, do nothing."
+          },
+          {
+            "type": "agent",
+            "if": "Edit(*requirements.txt)|Write(*requirements.txt)",
+            "statusMessage": "Auditing dependencies...",
+            "timeout": 120,
+            "prompt": "requirements.txt was just modified. The hook input is: $ARGUMENTS\n\nYour job is to audit the project's Python dependencies for vulnerabilities and staleness, then report findings clearly.\n\n## Steps\n\n1. Run a vulnerability scan:\n```\ncd /config/workspace/python/toodoo && source venv/bin/activate && pip-audit -r requirements.txt 2>&1\n```\n\n2. Check for outdated packages:\n```\ncd /config/workspace/python/toodoo && source venv/bin/activate && pip list --outdated 2>&1\n```\n\n3. Read requirements.txt to see the current pinning strategy.\n\n4. Interpret the results and output a systemMessage with this structure:\n\n```\nDEPENDENCY AUDIT\n\nVulnerabilities: <count or \"none found\">\n<For each vuln: package@version — CVE-XXXX-XXXX — severity — fix: upgrade to X.X.X>\n\nOutdated packages (project deps only):\n<For each outdated package in requirements.txt: package current→latest>\n\nRecommendations:\n<Actionable upgrade suggestions, or \"All clear\" if nothing needs attention>\n```\n\nOnly list outdated packages that are actually in requirements.txt (ignore pip itself and other system packages).\n\nIf both scans are clean, output: \"DEPENDENCY AUDIT: All clear — no vulnerabilities or outdated packages found.\"\n\n## Output format\n\nReturn ONLY this JSON so the message surfaces in the UI:\n```\n{\"systemMessage\": \"<your audit report here>\"}\n```\n\nDo not edit any files. Do not output anything other than the JSON object."
+          },
+          {
+            "type": "agent",
+            "if": "Edit(*.py)|Write(*.py)",
+            "statusMessage": "Linting...",
+            "timeout": 60,
+            "prompt": "A Python file was just written or edited. The hook input is: $ARGUMENTS\n\nYour job is to lint and format the file, auto-fixing everything possible and reporting what remains.\n\n## Tools available (all installed in the venv)\n- ruff check --fix  — auto-fixes imports, style, common bugs (pyflakes, pyupgrade, bugbear, isort)\n- ruff format        — opinionated formatter (like black)\n- mypy              — static type checker (report only, do not auto-fix)\n\n## Steps\n\n1. Extract the file path from the hook input ($ARGUMENTS → tool_input.file_path or tool_response.filePath).\n\n2. Skip if the file is inside tests/ or venv/ — those do not need type checking with mypy, but still run ruff on them.\n\n3. Run auto-fix and format:\n```\ncd /config/workspace/python/toodoo && source venv/bin/activate && ruff check --fix \"<file>\" 2>&1 && ruff format \"<file>\" 2>&1\n```\n\n4. Run mypy (source files only, skip tests/ and venv/):\n```\ncd /config/workspace/python/toodoo && source venv/bin/activate && mypy \"<file>\" 2>&1\n```\n\n5. Check whether ruff found any violations it could NOT auto-fix (exit code 1 with remaining errors after --fix):\n```\ncd /config/workspace/python/toodoo && source venv/bin/activate && ruff check \"<file>\" 2>&1\n```\n\n6. Decide what to report:\n- If everything is clean after auto-fix: do nothing (no output needed).\n- If there are remaining ruff violations or mypy errors that require manual attention: output a systemMessage listing them concisely (file:line — rule — message). Group by tool.\n\n## Output format\n\nIf there are unfixable violations to report, return ONLY this JSON:\n```\n{\"systemMessage\": \"LINT: <file>\\n<ruff violations if any>\\n<mypy errors if any>\"}\n```\n\nIf everything is clean (or all issues were auto-fixed), output nothing at all — an empty string or no output.\n\nDo not edit files other than the one being linted. Do not touch source files other than the target. Do not output anything beyond the JSON."
+          },
+          {
+            "type": "agent",
+            "if": "Edit(*.py)|Write(*.py)",
+            "statusMessage": "Syncing .env.example...",
+            "timeout": 60,
+            "prompt": "A Python source file was just changed. The hook input is: $ARGUMENTS\n\nYour job is to keep .env.example accurate and complete by scanning the entire codebase for environment variable reads.\n\n## How this project reads env vars\nLook for these patterns in all .py files (excluding venv/):\n- os.getenv(\"VAR_NAME\", ...)\n- os.environ.get(\"VAR_NAME\", ...)\n- os.environ[\"VAR_NAME\"]\n- os.environ.get(\"VAR_NAME\")\n\n## Steps\n\n1. Scan all .py files for env var reads:\n```\ngrep -rn --include=\"*.py\" --exclude-dir=venv --exclude-dir=__pycache__ \\\n  -E 'os\\.getenv\\s*\\(|os\\.environ(\\.get\\s*\\(|\\s*\\[)' \\\n  /config/workspace/python/toodoo/\n```\n\n2. Extract every unique variable name referenced. For each match, pull the string literal that is the first argument.\n\n3. Read the current /config/workspace/python/toodoo/.env.example.\n\n4. Compare: are there variables in the code not in .env.example? Are there entries in .env.example for variables no longer used in the code?\n\n5. Update .env.example only if there is a real difference:\n   - Add missing variables with an empty value and a one-line comment explaining what the variable controls (infer from usage context in the code).\n   - Remove entries for variables that no longer appear anywhere in the codebase.\n   - Preserve existing comments and ordering for variables that are already present.\n   - Keep the file sorted alphabetically within any logical group.\n   - Values stay empty (VAR=) — never invent real values.\n\n6. If .env.example is already accurate, do nothing.\n\n## .env.example format\n```\n# One-line description of what this controls.\nVAR_NAME=\n```\n\n## Constraints\n- Only write to .env.example. Do not touch any other file.\n- Do not add variables from test files or venv.\n- Do not invent variables that are not actually read with os.getenv / os.environ."
+          },
+          {
+            "type": "command",
+            "if": "Edit(*.py)|Write(*.py)",
+            "statusMessage": "Running tests...",
+            "timeout": 60,
+            "command": "cd /config/workspace/python/toodoo && source venv/bin/activate && python -m pytest tests/ -q 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}

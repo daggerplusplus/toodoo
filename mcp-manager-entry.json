@@ -1,0 +1,11 @@
+{
+  "name": "toodoo",
+  "description": "Toodoo App MCP server",
+  "command": "python",
+  "args": ["mcp_server.py"],
+  "cwd": "/path/to/toodoo",
+  "env": {
+    "TODO_DB": "/path/to/toodoo/todo.db"
+  },
+  "autostart": true
+}
