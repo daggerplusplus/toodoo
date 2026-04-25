@@ -160,8 +160,15 @@ button{font-family:var(--sans);cursor:pointer;border:none;background:none;}
 }
 
 .task-body{flex:1;min-width:0;}
-.task-title{font-size:14px;line-height:1.4;word-break:break-word;}
+.task-title{font-size:14px;line-height:1.4;word-break:break-word;cursor:text;border-radius:4px;}
+.task-title:hover{background:color-mix(in srgb,var(--accent) 8%,transparent);}
 .task-title.done{text-decoration:line-through;color:var(--muted);}
+.task-title-input{
+  font-family:var(--sans);font-size:14px;line-height:1.4;
+  width:100%;border:none;outline:2px solid var(--accent);
+  border-radius:4px;background:var(--card-bg);color:var(--text);
+  padding:0 2px;
+}
 .task-meta{display:flex;gap:10px;margin-top:3px;flex-wrap:wrap;}
 .task-meta-item{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:3px;}
 .task-meta-item.overdue{color:#ef4444;}
@@ -893,7 +900,7 @@ function taskHTML(t, color) {
     <div class="task-check ${t.done ? 'checked' : ''}"
          onclick="event.stopPropagation();toggleDone(${t.id})"></div>
     <div class="task-body">
-      <div class="task-title ${t.done ? 'done' : ''}">${esc(t.title)}</div>
+      <div class="task-title ${t.done ? 'done' : ''}" onclick="event.stopPropagation();editTaskTitle(${t.id},this)">${esc(t.title)}</div>
       <div class="task-meta">
         ${t.priority !== 'normal' ? `<span class="task-meta-item"><span class="priority-dot ${t.priority}"></span>${t.priority}</span>` : ''}
         ${t.due_date ? `<span class="task-meta-item ${overdue ? 'overdue' : ''}">📅 ${fmtDate(t.due_date)}</span>` : ''}
@@ -987,6 +994,37 @@ async function skipTask(id) {
   if (reason === null) return; // cancelled
   await api('POST', `/api/tasks/${id}/skip`, { reason: reason || null });
   await refresh();
+}
+
+function editTaskTitle(id, el) {
+  if (el.querySelector('input')) return;
+  const t = tasks.find(t => t.id === id);
+  const original = t.title;
+  el.textContent = '';
+  const input = document.createElement('input');
+  input.className = 'task-title-input';
+  input.value = original;
+  el.appendChild(input);
+  input.focus();
+  input.select();
+
+  let saved = false;
+  async function save() {
+    if (saved) return;
+    saved = true;
+    const title = input.value.trim();
+    if (title && title !== original) {
+      await patchTask(id, { title });
+    } else {
+      el.textContent = original;
+    }
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { saved = true; el.textContent = original; }
+  });
+  input.addEventListener('blur', save);
 }
 
 async function patchTask(id, patch) {
