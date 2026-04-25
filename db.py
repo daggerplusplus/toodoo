@@ -48,6 +48,7 @@ def init_db() -> None:
             name       TEXT    NOT NULL,
             icon       TEXT    NOT NULL DEFAULT '📋',
             color      TEXT    NOT NULL DEFAULT '#3b82f6',
+            sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
@@ -60,6 +61,7 @@ def init_db() -> None:
             priority     TEXT    NOT NULL DEFAULT 'normal',
             done         INTEGER NOT NULL DEFAULT 0,
             starred      INTEGER NOT NULL DEFAULT 0,
+            sort_order   INTEGER NOT NULL DEFAULT 0,
             created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
             completed_at TEXT
         );
@@ -88,6 +90,14 @@ def init_db() -> None:
             PRIMARY KEY (list_id, user_id)
         );
 
+        CREATE TABLE IF NOT EXISTS categories (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL,
+            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -98,6 +108,8 @@ def init_db() -> None:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)")}
         if "recurrence" not in cols:
             conn.execute("ALTER TABLE tasks ADD COLUMN recurrence TEXT")
+        if "sort_order" not in cols:
+            conn.execute("ALTER TABLE tasks ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
 
         log_cols = {r[1] for r in conn.execute("PRAGMA table_info(task_log)")}
         if "skipped" not in log_cols:
@@ -106,8 +118,12 @@ def init_db() -> None:
             conn.execute("ALTER TABLE task_log ADD COLUMN reason TEXT")
 
         list_cols = {r[1] for r in conn.execute("PRAGMA table_info(lists)")}
+        if "sort_order" not in list_cols:
+            conn.execute("ALTER TABLE lists ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         if "user_id" not in list_cols:
             conn.execute("ALTER TABLE lists ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        if "category_id" not in list_cols:
+            conn.execute("ALTER TABLE lists ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL")
 
         user_cols = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
         if "is_admin" not in user_cols:

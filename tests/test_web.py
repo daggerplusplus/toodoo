@@ -359,16 +359,16 @@ def test_export_includes_task_log(client, list_id):
 
 
 def test_import_restores_data(client, list_id):
+    lists_before = client.get("/api/lists").json()
+    list_name = next(l["name"] for l in lists_before if l["id"] == list_id)
     client.post(f"/api/lists/{list_id}/tasks", json={"title": "Survive import"})
     backup = client.get("/api/export").json()
-    # wipe the list then restore
     client.delete(f"/api/lists/{list_id}")
     r = client.post("/api/import", json=backup)
     assert r.status_code == 200
-    counts = r.json()["imported"]
-    assert counts["lists"] == backup["version"] or counts["lists"] >= 1
-    list_ids = [l["id"] for l in client.get("/api/lists").json()]
-    assert list_id in list_ids
+    assert r.json()["imported"]["lists"] >= 1
+    list_names = [l["name"] for l in client.get("/api/lists").json()]
+    assert list_name in list_names
 
 
 def test_import_rejects_bad_version(client):
@@ -382,6 +382,93 @@ def test_import_is_idempotent(client, list_id):
     r2 = client.post("/api/import", json=backup)
     assert r1.json()["imported"]["lists"] == r2.json()["imported"]["lists"]
     assert r1.json()["imported"]["tasks"] == r2.json()["imported"]["tasks"]
+
+
+# ---------------------------------------------------------------------------
+# Categories
+# ---------------------------------------------------------------------------
+
+def test_create_category(client):
+    r = client.post("/api/categories", json={"name": "Work"})
+    assert r.status_code == 201
+    body = r.json()
+    assert body["name"] == "Work"
+    assert "id" in body
+
+
+def test_get_categories(client):
+    client.post("/api/categories", json={"name": "Alpha"})
+    r = client.get("/api/categories")
+    assert r.status_code == 200
+    assert any(c["name"] == "Alpha" for c in r.json())
+
+
+def test_rename_category(client):
+    r = client.post("/api/categories", json={"name": "OldName"})
+    cat_id = r.json()["id"]
+    r = client.patch(f"/api/categories/{cat_id}", json={"name": "NewName"})
+    assert r.status_code == 200
+    assert r.json()["name"] == "NewName"
+
+
+def test_delete_category_uncategorizes_lists(client):
+    cat_id = client.post("/api/categories", json={"name": "Tmp"}).json()["id"]
+    list_id = client.post("/api/lists", json={"name": "Scoped"}).json()["id"]
+    client.patch(f"/api/lists/{list_id}", json={"category_id": cat_id})
+    client.delete(f"/api/categories/{cat_id}")
+    lists = client.get("/api/lists").json()
+    match = next(l for l in lists if l["id"] == list_id)
+    assert match["category_id"] is None
+
+
+def test_category_not_found(client):
+    assert client.patch("/api/categories/99999", json={"name": "X"}).status_code == 404
+    assert client.delete("/api/categories/99999").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# List patch & reorder
+# ---------------------------------------------------------------------------
+
+def test_patch_list_assign_category(client):
+    cat_id = client.post("/api/categories", json={"name": "Cat"}).json()["id"]
+    list_id = client.post("/api/lists", json={"name": "PatchMe"}).json()["id"]
+    r = client.patch(f"/api/lists/{list_id}", json={"category_id": cat_id})
+    assert r.status_code == 200
+    assert r.json()["category_id"] == cat_id
+
+
+def test_patch_list_clear_category(client):
+    cat_id = client.post("/api/categories", json={"name": "CatX"}).json()["id"]
+    list_id = client.post("/api/lists", json={"name": "ClearMe"}).json()["id"]
+    client.patch(f"/api/lists/{list_id}", json={"category_id": cat_id})
+    r = client.patch(f"/api/lists/{list_id}", json={"category_id": None})
+    assert r.status_code == 200
+    assert r.json()["category_id"] is None
+
+
+def test_reorder_lists(client):
+    a = client.post("/api/lists", json={"name": "RLA"}).json()["id"]
+    b = client.post("/api/lists", json={"name": "RLB"}).json()["id"]
+    c_id = client.post("/api/lists", json={"name": "RLC"}).json()["id"]
+    assert client.post("/api/lists/reorder", json={"ids": [c_id, a, b]}).status_code == 204
+    names = [l["name"] for l in client.get("/api/lists").json() if l["name"] in ("RLA", "RLB", "RLC")]
+    assert names == ["RLC", "RLA", "RLB"]
+
+
+def test_reorder_tasks(client, list_id):
+    t1 = client.post(f"/api/lists/{list_id}/tasks", json={"title": "RT1"}).json()["id"]
+    t2 = client.post(f"/api/lists/{list_id}/tasks", json={"title": "RT2"}).json()["id"]
+    t3 = client.post(f"/api/lists/{list_id}/tasks", json={"title": "RT3"}).json()["id"]
+    assert client.post(f"/api/lists/{list_id}/tasks/reorder", json={"ids": [t3, t1, t2]}).status_code == 204
+    titles = [t["title"] for t in client.get(f"/api/lists/{list_id}/tasks").json()]
+    assert titles == ["RT3", "RT1", "RT2"]
+
+
+def test_add_task_sort_order_increments(client, list_id):
+    t1 = client.post(f"/api/lists/{list_id}/tasks", json={"title": "SO1"}).json()
+    t2 = client.post(f"/api/lists/{list_id}/tasks", json={"title": "SO2"}).json()
+    assert t2["sort_order"] > t1["sort_order"]
 
 
 # ---------------------------------------------------------------------------

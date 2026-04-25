@@ -75,7 +75,7 @@ Toodoo includes an MCP server that lets Claude read and manage your todos. To us
 }
 ```
 
-Available tools: `list_lists`, `create_list`, `list_tasks`, `add_task`, `complete_task`, `update_task`, `delete_task`.
+Available tools: `list_lists`, `create_list`, `list_tasks`, `add_task`, `complete_task`, `update_task`, `delete_task`, `skip_task`, `list_log`, `export_db`.
 
 ## Tech Stack
 
@@ -94,13 +94,19 @@ The REST API is available at `/api/*`. All endpoints require authentication.
 | `GET` | `/api/health` | Health check (no auth required) |
 | `GET` | `/api/me` | Current user info |
 | `GET/POST` | `/api/lists` | List all lists / create a list |
+| `PATCH` | `/api/lists/{id}` | Update list (category, name, icon) |
 | `DELETE` | `/api/lists/{id}` | Delete a list (owner only) |
+| `POST` | `/api/lists/reorder` | Reorder lists |
 | `GET/POST` | `/api/lists/{id}/members` | List members / add member by username |
 | `DELETE` | `/api/lists/{id}/members/{uid}` | Remove a member |
+| `GET/POST` | `/api/categories` | List categories / create a category |
+| `PATCH/DELETE` | `/api/categories/{id}` | Rename / delete a category |
 | `GET/POST` | `/api/lists/{id}/tasks` | List tasks / add a task |
+| `POST` | `/api/lists/{id}/tasks/reorder` | Reorder tasks |
 | `PATCH/DELETE` | `/api/tasks/{id}` | Update / delete a task |
 | `POST` | `/api/tasks/{id}/toggle` | Toggle completion |
 | `POST` | `/api/tasks/{id}/star` | Toggle starred |
+| `POST` | `/api/tasks/{id}/skip` | Skip recurring task occurrence |
 | `GET` | `/api/log` | Activity log |
 | `GET/POST` | `/api/export` `/api/import` | Backup and restore |
 | `POST` | `/api/invite` | Generate invite link (admin only) |

@@ -20,4 +20,9 @@ def client(tmp_db):
     db_module.init_db()
     from web import app
     with TestClient(app) as c:
+        # First call creates the admin user; subsequent calls just log in.
+        c.post("/register", data={"username": "testuser", "password": "testpass"},
+               follow_redirects=False)
+        c.post("/login", data={"username": "testuser", "password": "testpass"},
+               follow_redirects=False)
         yield c

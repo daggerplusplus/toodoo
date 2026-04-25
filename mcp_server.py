@@ -201,7 +201,7 @@ def _handle(name: str, args: dict) -> object:
     conn = db.get_conn()
     try:
         if name == "list_lists":
-            rows = conn.execute("SELECT * FROM lists ORDER BY id").fetchall()
+            rows = conn.execute("SELECT * FROM lists ORDER BY sort_order, id").fetchall()
             out = []
             for r in rows:
                 d = db.row_to_dict(r)
@@ -212,7 +212,8 @@ def _handle(name: str, args: dict) -> object:
             return out
 
         if name == "create_list":
-            color = db.next_color(conn)
+            count = conn.execute("SELECT COUNT(*) FROM lists").fetchone()[0]
+            color = db.LIST_COLORS[count % len(db.LIST_COLORS)]
             cur = conn.execute(
                 "INSERT INTO lists (name, icon, color) VALUES (?,?,?)",
                 (args["name"], args.get("icon", "📋"), color),
@@ -232,18 +233,21 @@ def _handle(name: str, args: dict) -> object:
             if args.get("sort") == "due_date":
                 q += f" ORDER BY due_date IS NULL, due_date ASC, starred DESC, {priority_case}, created_at ASC"
             else:
-                q += f" ORDER BY starred DESC, {priority_case}, due_date IS NULL, due_date ASC, created_at ASC"
+                q += f" ORDER BY sort_order ASC, starred DESC, {priority_case}, due_date IS NULL, due_date ASC, created_at ASC"
             rows = conn.execute(q, params).fetchall()
             return [db.row_to_dict(r) for r in rows]
 
         if name == "add_task":
             list_id = args.get("list_id", 3)
+            max_order = conn.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) FROM tasks WHERE list_id=?", (list_id,)
+            ).fetchone()[0]
             cur = conn.execute(
-                "INSERT INTO tasks (list_id, title, notes, due_date, priority, starred, recurrence)"
-                " VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO tasks (list_id, title, notes, due_date, priority, starred, recurrence, sort_order)"
+                " VALUES (?,?,?,?,?,?,?,?)",
                 (list_id, args["title"], args.get("notes"), args.get("due_date"),
                  args.get("priority", "normal"), int(args.get("starred", False)),
-                 args.get("recurrence")),
+                 args.get("recurrence"), max_order + 1),
             )
             conn.commit()
             return db.row_to_dict(conn.execute("SELECT * FROM tasks WHERE id=?", (cur.lastrowid,)).fetchone())

@@ -382,6 +382,87 @@ body.dark ::-webkit-scrollbar-thumb{background:#44423c;}
 .list-shared-badge{
   font-size:10px;color:var(--muted);margin-left:4px;opacity:.7;flex-shrink:0;
 }
+.list-delete{
+  width:22px;height:22px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted2);font-size:12px;border-radius:5px;
+  opacity:0;transition:opacity .12s,color .12s,background .12s;
+}
+.list-item:hover .list-delete{opacity:1;}
+.list-delete:hover{color:var(--danger);background:#fee2e2;}
+body.dark .list-delete:hover{background:#2d1a1a;}
+/* ── Drag & drop ── */
+.drag-handle{
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  cursor:grab;touch-action:none;color:var(--muted2);
+  opacity:0;transition:opacity .12s;
+}
+.drag-handle:active{cursor:grabbing;}
+.list-item:hover .drag-handle,.task-item:hover .drag-handle{opacity:1;}
+.drag-placeholder-list{
+  height:36px;border-radius:8px;margin:1px 8px;
+  background:color-mix(in srgb,var(--accent) 8%,transparent);
+  border:2px dashed color-mix(in srgb,var(--accent) 40%,transparent);
+  box-sizing:border-box;
+}
+.drag-placeholder-task{
+  height:44px;border-radius:var(--radius);margin-bottom:2px;
+  background:color-mix(in srgb,var(--accent) 8%,transparent);
+  border:2px dashed color-mix(in srgb,var(--accent) 40%,transparent);
+  box-sizing:border-box;
+}
+
+.list-move-btn{
+  width:22px;height:22px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted2);border-radius:5px;
+  opacity:0;transition:opacity .12s,color .12s,background .12s;
+}
+.list-item:hover .list-move-btn{opacity:1;}
+.list-move-btn:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,transparent);}
+
+/* ── Category sections ── */
+.category-header{
+  display:flex;align-items:center;gap:4px;
+  padding:6px 16px 4px;margin:2px 8px;border-radius:6px;
+  font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);cursor:pointer;user-select:none;
+  transition:background .12s;
+}
+.category-header:hover{background:#f5f4f0;}
+body.dark .category-header:hover{background:#2c2b28;}
+.category-chevron{font-size:10px;transition:transform .15s;margin-right:2px;display:inline-block;}
+.category-chevron.open{transform:rotate(90deg);}
+.category-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.category-header-actions{display:flex;gap:2px;opacity:0;transition:opacity .12s;}
+.category-header:hover .category-header-actions{opacity:1;}
+.cat-hdr-btn{
+  width:18px;height:18px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:4px;font-size:11px;color:var(--muted2);
+  transition:color .12s,background .12s;
+}
+.cat-hdr-btn.rename:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,transparent);}
+.cat-hdr-btn.del:hover{color:var(--danger);background:#fee2e2;}
+body.dark .cat-hdr-btn.del:hover{background:#2d1a1a;}
+.category-lists.collapsed{display:none;}
+
+/* ── Category assignment dropdown ── */
+#cat-dropdown{
+  position:fixed;z-index:200;display:none;
+  background:var(--sidebar-bg);border:1px solid var(--border);
+  border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.12);
+  min-width:170px;padding:4px 0;
+}
+.cat-dd-item{
+  padding:7px 14px;font-size:13px;cursor:pointer;
+  display:flex;align-items:center;gap:8px;
+  transition:background .1s;white-space:nowrap;
+}
+.cat-dd-item:hover{background:#f5f4f0;}
+body.dark .cat-dd-item:hover{background:#2c2b28;}
+.cat-dd-item.active{color:var(--accent);font-weight:600;}
+.cat-dd-divider{border-top:1px solid var(--border);margin:4px 0;}
 
 /* ── Mobile / responsive ── */
 @media (max-width:640px){
@@ -421,6 +502,10 @@ body.dark ::-webkit-scrollbar-thumb{background:#44423c;}
       <button class="new-list-btn" onclick="openNewListModal()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         New list
+      </button>
+      <button class="new-list-btn" onclick="createCategory()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        New category
       </button>
       <button class="new-list-btn" id="invite-btn" onclick="inviteSomeone()" style="display:none">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
@@ -487,6 +572,9 @@ body.dark ::-webkit-scrollbar-thumb{background:#44423c;}
   </div>
 </div>
 
+<!-- Category assignment dropdown (populated + positioned by JS) -->
+<div id="cat-dropdown"></div>
+
 <!-- Share modal -->
 <div class="modal-overlay" id="share-modal-overlay" onclick="closeShareModalBg(event)">
   <div class="modal">
@@ -508,6 +596,7 @@ body.dark ::-webkit-scrollbar-thumb{background:#44423c;}
 // ── State ───────────────────────────────────────────────────────────────────
 let lists = [];
 let tasks = [];
+let categories = [];
 let currentUser = null;
 let activeListId = null;
 let activeView = 'tasks'; // 'tasks' | 'log'
@@ -517,6 +606,7 @@ let expandedTaskId = null;
 let selectedEmoji = '📋';
 let darkMode = localStorage.getItem('darkMode') === 'true';
 let sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+let collapsedCategories = new Set(JSON.parse(localStorage.getItem('collapsedCategories') || '[]'));
 
 const MOON_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 const SUN_SVG  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
@@ -580,33 +670,79 @@ async function boot() {
   userEl.style.display = '';
   if (me.is_admin) document.getElementById('invite-btn').style.display = '';
   document.getElementById('logout-btn').style.display = '';
-  lists = await api('GET', '/api/lists');
+  [lists, categories] = await Promise.all([
+    api('GET', '/api/lists'),
+    api('GET', '/api/categories'),
+  ]);
   renderSidebar();
   if (lists.length) selectList(lists[0].id);
 }
 
 // ── Sidebar ──────────────────────────────────────────────────────────────────
+const DRAG_SVG = `<svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="6" r="1.5"/><circle cx="8" cy="6" r="1.5"/><circle cx="2" cy="10" r="1.5"/><circle cx="8" cy="10" r="1.5"/></svg>`;
+
+function renderListItem(l) {
+  const isShared = currentUser && l.user_id !== currentUser.id;
+  return `
+  <div class="list-item ${activeView==='tasks'&&l.id===activeListId?'active':''}"
+       style="--list-color:${l.color}" data-id="${l.id}"
+       onclick="selectList(${l.id})">
+    ${!isShared ? `<span class="drag-handle" style="width:18px;height:28px;" onpointerdown="startListDrag(event,${l.id})">${DRAG_SVG}</span>` : ''}
+    <span class="list-icon">${l.icon}</span>
+    <span class="list-name">${esc(l.name)}</span>
+    ${isShared ? `<span class="list-shared-badge" title="Shared by ${esc(l.owner_username)}">👥</span>` : ''}
+    ${l.pending > 0 ? `<span class="list-badge">${l.pending}</span>` : ''}
+    ${!isShared ? `<button class="list-move-btn" onclick="event.stopPropagation();openCategoryDropdown(${l.id},event)" title="Move to category">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    </button>` : ''}
+    ${!isShared ? `<button class="list-delete" onclick="event.stopPropagation();deleteList(${l.id})" title="Delete list">✕</button>` : ''}
+  </div>`;
+}
+
 function renderSidebar() {
   const el = document.getElementById('list-items');
+
   const logItem = `
     <div class="list-item ${activeView==='log'?'active':''}"
          style="--list-color:#6366f1" onclick="selectLog()">
       <span class="list-icon">📜</span>
       <span class="list-name">Activity Log</span>
     </div>`;
-  const listItems = lists.map(l => {
-    const isShared = currentUser && l.user_id !== currentUser.id;
+
+  const ownedLists = lists.filter(l => currentUser && l.user_id === currentUser.id);
+  const sharedLists = lists.filter(l => currentUser && l.user_id !== currentUser.id);
+
+  // Group owned lists by category
+  const byCategory = {};
+  const uncategorized = [];
+  ownedLists.forEach(l => {
+    if (l.category_id) {
+      (byCategory[l.category_id] = byCategory[l.category_id] || []).push(l);
+    } else {
+      uncategorized.push(l);
+    }
+  });
+
+  const categorySections = categories.map(cat => {
+    const catLists = byCategory[cat.id] || [];
+    const collapsed = collapsedCategories.has(cat.id);
     return `
-    <div class="list-item ${activeView==='tasks'&&l.id===activeListId?'active':''}"
-         style="--list-color:${l.color}"
-         onclick="selectList(${l.id})">
-      <span class="list-icon">${l.icon}</span>
-      <span class="list-name">${esc(l.name)}</span>
-      ${isShared ? `<span class="list-shared-badge" title="Shared by ${esc(l.owner_username)}">👥</span>` : ''}
-      ${l.pending > 0 ? `<span class="list-badge">${l.pending}</span>` : ''}
+    <div class="category-section">
+      <div class="category-header" onclick="toggleCategory(${cat.id})">
+        <span class="category-chevron ${collapsed ? '' : 'open'}">›</span>
+        <span class="category-name">${esc(cat.name)}</span>
+        <span class="category-header-actions" onclick="event.stopPropagation()">
+          <button class="cat-hdr-btn rename" onclick="renameCategory(${cat.id})" title="Rename">✎</button>
+          <button class="cat-hdr-btn del" onclick="deleteCategory(${cat.id})" title="Delete category">✕</button>
+        </span>
+      </div>
+      <div class="category-lists ${collapsed ? 'collapsed' : ''}">
+        ${catLists.length ? catLists.map(renderListItem).join('') : '<div style="padding:3px 16px 3px 42px;font-size:12px;color:var(--muted2)">No lists</div>'}
+      </div>
     </div>`;
   }).join('');
-  el.innerHTML = logItem + listItems;
+
+  el.innerHTML = logItem + categorySections + uncategorized.map(renderListItem).join('') + sharedLists.map(renderListItem).join('');
 }
 
 async function selectList(id) {
@@ -753,6 +889,7 @@ function taskHTML(t, color) {
   return `
   <div class="task-item ${t.done ? 'done-item' : ''}" data-id="${t.id}"
        style="--list-color:${color}" onclick="toggleExpand(event,${t.id})">
+    ${!t.done && sortMode === 'default' ? `<span class="drag-handle" style="width:16px;height:28px;margin-top:1px;" onpointerdown="startTaskDrag(event,${t.id})">${DRAG_SVG}</span>` : ''}
     <div class="task-check ${t.done ? 'checked' : ''}"
          onclick="event.stopPropagation();toggleDone(${t.id})"></div>
     <div class="task-body">
@@ -921,6 +1058,102 @@ function pickEmoji(el, emoji) {
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
 function closeModalBg(e) { if (e.target.id === 'modal-overlay') closeModal(); }
 
+async function deleteList(id) {
+  const list = lists.find(l => l.id === id);
+  if (!confirm(`Delete "${list?.name}"? This will permanently remove all tasks in it.`)) return;
+  await api('DELETE', `/api/lists/${id}`);
+  lists = await api('GET', '/api/lists');
+  if (activeListId === id) {
+    activeListId = lists[0]?.id ?? null;
+    if (activeListId) selectList(activeListId);
+    else { activeView = null; renderSidebar(); }
+  } else {
+    renderSidebar();
+  }
+}
+
+// ── Category management ───────────────────────────────────────────────────────
+function toggleCategory(id) {
+  if (collapsedCategories.has(id)) collapsedCategories.delete(id);
+  else collapsedCategories.add(id);
+  localStorage.setItem('collapsedCategories', JSON.stringify([...collapsedCategories]));
+  renderSidebar();
+}
+
+async function createCategory() {
+  const name = window.prompt('Category name:');
+  if (!name || !name.trim()) return;
+  await api('POST', '/api/categories', { name: name.trim() });
+  categories = await api('GET', '/api/categories');
+  renderSidebar();
+}
+
+async function renameCategory(id) {
+  const cat = categories.find(c => c.id === id);
+  const name = window.prompt('Rename category:', cat?.name || '');
+  if (!name || !name.trim() || name.trim() === cat?.name) return;
+  await api('PATCH', `/api/categories/${id}`, { name: name.trim() });
+  categories = await api('GET', '/api/categories');
+  renderSidebar();
+}
+
+async function deleteCategory(id) {
+  const cat = categories.find(c => c.id === id);
+  if (!confirm(`Delete category "${cat?.name}"? Lists in it will become uncategorized.`)) return;
+  await api('DELETE', `/api/categories/${id}`);
+  [lists, categories] = await Promise.all([api('GET', '/api/lists'), api('GET', '/api/categories')]);
+  renderSidebar();
+}
+
+// ── Category assignment dropdown ──────────────────────────────────────────────
+function openCategoryDropdown(listId, event) {
+  closeCategoryDropdown();
+  const list = lists.find(l => l.id === listId);
+  const dd = document.getElementById('cat-dropdown');
+
+  const items = [
+    `<div class="cat-dd-item ${!list.category_id ? 'active' : ''}" onclick="moveListToCategory(${listId},null)">No category</div>`,
+    categories.length ? '<div class="cat-dd-divider"></div>' : '',
+    ...categories.map(cat =>
+      `<div class="cat-dd-item ${list.category_id === cat.id ? 'active' : ''}" onclick="moveListToCategory(${listId},${cat.id})">${esc(cat.name)}</div>`
+    ),
+    '<div class="cat-dd-divider"></div>',
+    `<div class="cat-dd-item" onclick="createCategoryAndAssign(${listId})">+ New category</div>`,
+  ].join('');
+
+  dd.innerHTML = items;
+  dd.style.display = 'block';
+
+  const btn = event.target.closest('button');
+  const rect = btn.getBoundingClientRect();
+  dd.style.top = (rect.bottom + 4) + 'px';
+  dd.style.left = rect.left + 'px';
+
+  setTimeout(() => document.addEventListener('click', closeCategoryDropdown, { once: true }), 0);
+}
+
+function closeCategoryDropdown() {
+  document.getElementById('cat-dropdown').style.display = 'none';
+}
+
+async function moveListToCategory(listId, categoryId) {
+  closeCategoryDropdown();
+  await api('PATCH', `/api/lists/${listId}`, { category_id: categoryId });
+  lists = await api('GET', '/api/lists');
+  renderSidebar();
+}
+
+async function createCategoryAndAssign(listId) {
+  closeCategoryDropdown();
+  const name = window.prompt('New category name:');
+  if (!name || !name.trim()) return;
+  const cat = await api('POST', '/api/categories', { name: name.trim() });
+  if (!cat) return;
+  await api('PATCH', `/api/lists/${listId}`, { category_id: cat.id });
+  [lists, categories] = await Promise.all([api('GET', '/api/lists'), api('GET', '/api/categories')]);
+  renderSidebar();
+}
+
 async function submitNewList() {
   const name = document.getElementById('modal-name').value.trim();
   if (!name) return;
@@ -934,6 +1167,104 @@ async function submitNewList() {
 document.getElementById('modal-name').addEventListener('keydown', e => {
   if (e.key === 'Enter') submitNewList();
 });
+
+// ── Drag & drop engine ────────────────────────────────────────────────────────
+let _drag = null;
+
+document.addEventListener('pointermove', e => {
+  if (!_drag) return;
+  const { ghost, ph, container, itemSelector, offsetX, offsetY } = _drag;
+  ghost.style.top  = (e.clientY - offsetY) + 'px';
+  ghost.style.left = (e.clientX - offsetX) + 'px';
+
+  const items = [...container.querySelectorAll(':scope > ' + itemSelector)]
+    .filter(el => el !== _drag.item && el !== ph);
+
+  let insertBefore = null;
+  for (const sib of items) {
+    const r = sib.getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) { insertBefore = sib; break; }
+  }
+  if (insertBefore) container.insertBefore(ph, insertBefore);
+  else if (items.length) items[items.length - 1].after(ph);
+  else container.appendChild(ph);
+});
+
+document.addEventListener('pointerup', _endDrag);
+document.addEventListener('pointercancel', _cancelDrag);
+
+function _startDrag(e, item, container, itemSelector, phClass, onDrop) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.setPointerCapture(e.pointerId);
+
+  const rect = item.getBoundingClientRect();
+  const ghost = item.cloneNode(true);
+  Object.assign(ghost.style, {
+    position: 'fixed', zIndex: 1000, pointerEvents: 'none',
+    width: rect.width + 'px', top: rect.top + 'px', left: rect.left + 'px',
+    opacity: '0.88', borderRadius: getComputedStyle(item).borderRadius,
+    boxShadow: '0 8px 24px rgba(0,0,0,.18)',
+    background: 'var(--card-bg, var(--sidebar-bg, #fff))',
+  });
+  document.body.appendChild(ghost);
+
+  const ph = document.createElement('div');
+  ph.className = phClass;
+  item.after(ph);
+  item.style.opacity = '0.1';
+
+  _drag = { item, container, ghost, ph, itemSelector, onDrop,
+    offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+  document.body.style.userSelect = 'none';
+}
+
+function _endDrag() {
+  if (!_drag) return;
+  const { item, container, ghost, ph, itemSelector, onDrop } = _drag;
+  _drag = null;
+  container.insertBefore(item, ph);
+  ph.remove();
+  item.style.opacity = '';
+  ghost.remove();
+  document.body.style.userSelect = '';
+  const orderedIds = [...container.querySelectorAll(':scope > ' + itemSelector)]
+    .filter(el => el.dataset.id)
+    .map(el => +el.dataset.id);
+  onDrop(orderedIds);
+}
+
+function _cancelDrag() {
+  if (!_drag) return;
+  const { item, ghost, ph } = _drag;
+  _drag = null;
+  item.style.opacity = '';
+  ghost.remove();
+  ph.remove();
+  document.body.style.userSelect = '';
+}
+
+function startListDrag(e, listId) {
+  const item = e.currentTarget.closest('.list-item');
+  const container = item.parentElement;
+  _startDrag(e, item, container, '.list-item[data-id]', 'drag-placeholder-list', async ids => {
+    await api('POST', '/api/lists/reorder', { ids });
+    lists = await api('GET', '/api/lists');
+    renderSidebar();
+  });
+}
+
+function startTaskDrag(e, taskId) {
+  if (sortMode !== 'default') return;
+  const item = e.currentTarget.closest('.task-item');
+  if (item.classList.contains('done-item')) return;
+  const container = item.parentElement;
+  _startDrag(e, item, container, '.task-item:not(.done-item)', 'drag-placeholder-task', async ids => {
+    await api('POST', `/api/lists/${activeListId}/tasks/reorder`, { ids });
+    tasks = await api('GET', `/api/lists/${activeListId}/tasks?include_done=${showDone}&sort=${sortMode}`);
+    renderTasks();
+  });
+}
 
 // ── Refresh helpers ───────────────────────────────────────────────────────────
 async function refresh(keepExpanded = false) {

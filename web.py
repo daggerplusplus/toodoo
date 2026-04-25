@@ -162,6 +162,24 @@ class MemberAdd(BaseModel):
     username: str
 
 
+class ReorderBody(BaseModel):
+    ids: list[int]
+
+
+class CategoryCreate(BaseModel):
+    name: str
+
+
+class CategoryPatch(BaseModel):
+    name: str | None = None
+
+
+class ListPatch(BaseModel):
+    category_id: int | None = None
+    name: str | None = None
+    icon: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
@@ -219,7 +237,7 @@ def get_lists(request: Request):
             " JOIN list_members lm ON lm.list_id = l.id"
             " JOIN users u ON u.id = l.user_id"
             " WHERE lm.user_id=?"
-            " ORDER BY (l.user_id != ?) ASC, l.id ASC",
+            " ORDER BY (l.user_id != ?) ASC, l.sort_order ASC, l.id ASC",
             (uid, uid),
         ).fetchall()
         result = []
@@ -310,6 +328,107 @@ def remove_list_member(request: Request, list_id: int, member_uid: int):
         conn.commit()
 
 
+@app.patch("/api/lists/{list_id}")
+def update_list(request: Request, list_id: int, body: ListPatch):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        _own_list(conn, list_id, uid)
+        fields = body.model_dump(exclude_unset=True)
+        if not fields:
+            return db.row_to_dict(conn.execute("SELECT * FROM lists WHERE id=?", (list_id,)).fetchone())
+        if "category_id" in fields and fields["category_id"] is not None:
+            if not conn.execute(
+                "SELECT id FROM categories WHERE id=? AND user_id=?", (fields["category_id"], uid)
+            ).fetchone():
+                raise HTTPException(404, "Category not found")
+        set_clause = ", ".join(f"{k}=?" for k in fields)
+        conn.execute(f"UPDATE lists SET {set_clause} WHERE id=?", (*fields.values(), list_id))
+        conn.commit()
+        return db.row_to_dict(conn.execute("SELECT * FROM lists WHERE id=?", (list_id,)).fetchone())
+
+
+@app.post("/api/lists/reorder", status_code=204)
+def reorder_lists(request: Request, body: ReorderBody):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        for i, list_id in enumerate(body.ids):
+            conn.execute(
+                "UPDATE lists SET sort_order=? WHERE id=? AND user_id=?", (i, list_id, uid)
+            )
+        conn.commit()
+
+
+@app.post("/api/lists/{list_id}/tasks/reorder", status_code=204)
+def reorder_tasks(request: Request, list_id: int, body: ReorderBody):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        _member_list(conn, list_id, uid)
+        for i, task_id in enumerate(body.ids):
+            conn.execute(
+                "UPDATE tasks SET sort_order=? WHERE id=? AND list_id=?", (i, task_id, list_id)
+            )
+        conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Category routes
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/categories")
+def get_categories(request: Request):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM categories WHERE user_id=? ORDER BY sort_order, name", (uid,)
+        ).fetchall()
+        return [db.row_to_dict(r) for r in rows]
+
+
+@app.post("/api/categories", status_code=201)
+def create_category(request: Request, body: CategoryCreate):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO categories (name, user_id) VALUES (?,?)", (body.name.strip(), uid)
+        )
+        conn.commit()
+        return db.row_to_dict(conn.execute("SELECT * FROM categories WHERE id=?", (cur.lastrowid,)).fetchone())
+
+
+@app.patch("/api/categories/{cat_id}")
+def update_category(request: Request, cat_id: int, body: CategoryPatch):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM categories WHERE id=? AND user_id=?", (cat_id, uid)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Category not found")
+        fields = body.model_dump(exclude_unset=True)
+        if not fields:
+            return db.row_to_dict(row)
+        if "name" in fields:
+            fields["name"] = fields["name"].strip()
+        set_clause = ", ".join(f"{k}=?" for k in fields)
+        conn.execute(f"UPDATE categories SET {set_clause} WHERE id=?", (*fields.values(), cat_id))
+        conn.commit()
+        return db.row_to_dict(conn.execute("SELECT * FROM categories WHERE id=?", (cat_id,)).fetchone())
+
+
+@app.delete("/api/categories/{cat_id}", status_code=204)
+def delete_category(request: Request, cat_id: int):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        if not conn.execute(
+            "SELECT id FROM categories WHERE id=? AND user_id=?", (cat_id, uid)
+        ).fetchone():
+            raise HTTPException(404, "Category not found")
+        conn.execute("UPDATE lists SET category_id=NULL WHERE category_id=?", (cat_id,))
+        conn.execute("DELETE FROM categories WHERE id=?", (cat_id,))
+        conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Task routes
 # ---------------------------------------------------------------------------
@@ -331,7 +450,8 @@ def get_tasks(request: Request, list_id: int, include_done: bool = False, sort: 
             )
         else:
             query += (
-                " ORDER BY starred DESC, CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,"
+                " ORDER BY sort_order ASC, starred DESC,"
+                " CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,"
                 " due_date IS NULL, due_date ASC, created_at ASC"
             )
         rows = conn.execute(query, params).fetchall()
@@ -343,11 +463,14 @@ def add_task(request: Request, list_id: int, body: TaskCreate):
     uid = _uid(request)
     with db.get_conn() as conn:
         _member_list(conn, list_id, uid)
+        max_order = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) FROM tasks WHERE list_id=?", (list_id,)
+        ).fetchone()[0]
         cur = conn.execute(
-            "INSERT INTO tasks (list_id, title, notes, due_date, priority, starred, recurrence)"
-            " VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO tasks (list_id, title, notes, due_date, priority, starred, recurrence, sort_order)"
+            " VALUES (?,?,?,?,?,?,?,?)",
             (list_id, body.title, body.notes, body.due_date, body.priority,
-             int(body.starred), body.recurrence),
+             int(body.starred), body.recurrence, max_order + 1),
         )
         conn.commit()
         task = conn.execute("SELECT * FROM tasks WHERE id=?", (cur.lastrowid,)).fetchone()
