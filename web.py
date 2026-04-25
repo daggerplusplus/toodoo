@@ -5,14 +5,12 @@ Serves the REST API and the static UI.
 Run:  uvicorn web:app --port 8001 --reload
 """
 
-import os
+import json
 import secrets as _secrets
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-
-import json
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -504,36 +502,60 @@ def update_task(request: Request, task_id: int, body: TaskPatch):
         return db.row_to_dict(updated)
 
 
+_RECURRENCE_ALIASES = {"daily": "1d", "weekly": "1w", "monthly": "1m", "yearly": "1y"}
+_RECURRENCE_UNITS = {"d": "day", "w": "week", "m": "month", "y": "year"}
+
+
+def _parse_recurrence(recurrence: str) -> tuple[int, str]:
+    """Return (n, unit) where unit is one of d/w/m/y. Handles legacy aliases."""
+    r = _RECURRENCE_ALIASES.get(recurrence, recurrence)
+    n = int(r[:-1])
+    unit = r[-1]
+    return n, unit
+
+
 def _recurrence_interval(recurrence: str, advance: int) -> str:
-    if recurrence == "daily":
-        return f"+{advance} day"
-    if recurrence == "weekly":
-        return f"+{advance * 7} day"
-    if recurrence == "monthly":
-        return f"+{advance} month"
-    return f"+{advance} year"
+    n, unit = _parse_recurrence(recurrence)
+    total = n * advance
+    if unit == "d":
+        return f"+{total} day"
+    if unit == "w":
+        return f"+{total * 7} day"
+    if unit == "m":
+        return f"+{total} month"
+    return f"+{total} year"
+
+
+def _advance_due_date_sql() -> str:
+    """SQL expression that advances due_date by a modifier, preserving HH:MM if present."""
+    return (
+        "CASE WHEN instr(due_date,'T')>0"
+        " THEN strftime('%Y-%m-%dT%H:%M',due_date,?)"
+        " ELSE date(due_date,?) END"
+    )
 
 
 def _missed_cycles(due_date_str: str, recurrence: str) -> int:
-    due = date.fromisoformat(due_date_str)
+    due = date.fromisoformat(due_date_str[:10])
     today = date.today()
     if today <= due:
         return 0
+    n, unit = _parse_recurrence(recurrence)
     days = (today - due).days
-    if recurrence == "daily":
-        return days
-    if recurrence == "weekly":
-        return days // 7
-    if recurrence == "monthly":
+    if unit == "d":
+        return days // n
+    if unit == "w":
+        return days // (n * 7)
+    if unit == "m":
         months = (today.year - due.year) * 12 + (today.month - due.month)
         if today.day < due.day:
             months -= 1
-        return max(0, months)
-    if recurrence == "yearly":
+        return max(0, months // n)
+    if unit == "y":
         years = today.year - due.year
         if (today.month, today.day) < (due.month, due.day):
             years -= 1
-        return max(0, years)
+        return max(0, years // n)
     return 0
 
 
@@ -550,8 +572,8 @@ def toggle_task(request: Request, task_id: int):
             interval = _recurrence_interval(row["recurrence"], missed + 1)
             if row["due_date"]:
                 conn.execute(
-                    "UPDATE tasks SET due_date=date(due_date,?) WHERE id=?",
-                    (interval, task_id),
+                    f"UPDATE tasks SET due_date={_advance_due_date_sql()} WHERE id=?",
+                    (interval, interval, task_id),
                 )
             conn.execute(
                 "INSERT INTO task_log"
@@ -603,7 +625,8 @@ def skip_task(request: Request, task_id: int, body: SkipBody):
         interval = _recurrence_interval(row["recurrence"], missed + 1)
         if row["due_date"]:
             conn.execute(
-                "UPDATE tasks SET due_date=date(due_date,?) WHERE id=?", (interval, task_id)
+                f"UPDATE tasks SET due_date={_advance_due_date_sql()} WHERE id=?",
+                (interval, interval, task_id),
             )
         conn.execute(
             "INSERT INTO task_log"
@@ -690,6 +713,7 @@ def import_db(request: Request, body: ImportPayload):
             phs = ", ".join("?" * len(data))
             cur = conn.execute(f"INSERT INTO lists ({cols}) VALUES ({phs})", list(data.values()))
             new_id = cur.lastrowid
+            assert new_id is not None
             id_map[row["id"]] = new_id
             conn.execute(
                 "INSERT INTO list_members (list_id, user_id) VALUES (?,?)", (new_id, uid)
@@ -791,6 +815,7 @@ async def register_submit(
             (username, db.hash_pw(password), is_admin),
         )
         new_uid = cur.lastrowid
+        assert new_uid is not None
 
         if token:
             conn.execute(

@@ -6,7 +6,7 @@ A self-hosted personal todo app with multi-user support, shared lists, and a Cla
 
 - **Multiple users** — invite-based registration; each user has private lists by default
 - **Shared lists** — owners can share any list with other users
-- **Task management** — priorities, due dates, starred tasks, recurring tasks, notes
+- **Task management** — priorities, due dates (with optional time of day), starred tasks, recurring tasks, notes
 - **Activity log** — history of completed and skipped recurring tasks
 - **Dark mode** — follows system preference
 - **Mobile-friendly** — responsive layout with collapsible sidebar

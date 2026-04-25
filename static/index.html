@@ -818,7 +818,7 @@ function logEntryHTML(e) {
   const dt = new Date(e.completed_at.replace(' ', 'T') + 'Z');
   const time = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const recurrenceMeta = e.recurrence
-    ? `<span class="task-meta-item">🔁 ${e.recurrence}${e.cycles_late > 0 ? ` · ${e.cycles_late} behind` : ''}</span>`
+    ? `<span class="task-meta-item">🔁 ${fmtRecurrence(e.recurrence)}${e.cycles_late > 0 ? ` · ${e.cycles_late} behind` : ''}</span>`
     : '';
   const SKIP_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`;
   const icon = e.skipped
@@ -892,7 +892,10 @@ function renderTasks() {
 }
 
 function taskHTML(t, color) {
-  const overdue = t.due_date && !t.done && new Date(t.due_date) < new Date();
+  const overdue = t.due_date && !t.done && (
+    t.due_date.length > 10 ? new Date(t.due_date) < new Date()
+                           : new Date(t.due_date + 'T00:00:00') < new Date()
+  );
   return `
   <div class="task-item ${t.done ? 'done-item' : ''}" data-id="${t.id}"
        style="--list-color:${color}" onclick="toggleExpand(event,${t.id})">
@@ -915,11 +918,16 @@ function taskHTML(t, color) {
             placeholder="Add a note…">${esc(t.notes || '')}</textarea>
         </div>
         <div class="detail-row detail-row-inline">
-          <div style="flex:1">
+          <div style="flex:1.4">
             <label>Due date</label>
-            <input type="date" class="detail-input detail-select"
-              value="${t.due_date || ''}"
-              onchange="patchTask(${t.id},{due_date:this.value||null})">
+            <div style="display:flex;gap:4px">
+              <input type="date" id="due-date-${t.id}" class="detail-input detail-select" style="flex:1;min-width:0"
+                value="${(t.due_date||'').substring(0,10)}"
+                onchange="saveDueDate(${t.id})">
+              <input type="time" id="due-time-${t.id}" class="detail-input detail-select" style="flex:0.8;min-width:0"
+                value="${t.due_date&&t.due_date.length>10?t.due_date.substring(11,16):''}"
+                onchange="saveDueDate(${t.id})">
+            </div>
           </div>
           <div style="flex:1">
             <label>Priority</label>
@@ -931,13 +939,7 @@ function taskHTML(t, color) {
           </div>
           <div style="flex:1">
             <label>Repeat</label>
-            <select class="detail-select" onchange="patchTask(${t.id},{recurrence:this.value||null})">
-              <option value=""        ${!t.recurrence?'selected':''}>None</option>
-              <option value="daily"   ${t.recurrence==='daily'?'selected':''}>Daily</option>
-              <option value="weekly"  ${t.recurrence==='weekly'?'selected':''}>Weekly</option>
-              <option value="monthly" ${t.recurrence==='monthly'?'selected':''}>Monthly</option>
-              <option value="yearly"  ${t.recurrence==='yearly'?'selected':''}>Yearly</option>
-            </select>
+            ${repeatFieldHTML(t)}
           </div>
           <div style="flex:1">
             <label>Move to</label>
@@ -970,7 +972,68 @@ function toggleDoneSection(labelEl) {
   section.style.display = open ? '' : 'none';
 }
 
+// ── Repeat field ─────────────────────────────────────────────────────────────
+function _isCustomRecurrence(r) {
+  if (!r) return false;
+  return !['daily','weekly','monthly','yearly','1d','1w','1m','1y'].includes(r);
+}
+
+function repeatFieldHTML(t) {
+  const isCustom = _isCustomRecurrence(t.recurrence);
+  const p = isCustom ? parseRecurrence(t.recurrence) : null;
+  const unitLabels = {d:'days', w:'weeks', m:'months', y:'years'};
+  return `<select class="detail-select" id="repeat-sel-${t.id}" onchange="onRepeatChange(this,${t.id})">
+    <option value=""        ${!t.recurrence?'selected':''}>None</option>
+    <option value="1d"      ${t.recurrence==='daily'||t.recurrence==='1d'?'selected':''}>Daily</option>
+    <option value="1w"      ${t.recurrence==='weekly'||t.recurrence==='1w'?'selected':''}>Weekly</option>
+    <option value="1m"      ${t.recurrence==='monthly'||t.recurrence==='1m'?'selected':''}>Monthly</option>
+    <option value="1y"      ${t.recurrence==='yearly'||t.recurrence==='1y'?'selected':''}>Yearly</option>
+    <option value="custom"  ${isCustom?'selected':''}>Custom…</option>
+  </select>
+  <div id="custom-repeat-${t.id}" style="display:${isCustom?'flex':'none'};align-items:center;gap:4px;margin-top:4px">
+    <span style="font-size:0.8em;opacity:.7">Every</span>
+    <input type="number" min="1" max="999" value="${p?p.n:2}" style="width:48px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85em" id="custom-n-${t.id}">
+    <select id="custom-unit-${t.id}" style="padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85em">
+      <option value="d" ${p&&p.unit==='d'?'selected':''}>days</option>
+      <option value="w" ${p&&p.unit==='w'?'selected':''}>weeks</option>
+      <option value="m" ${p&&p.unit==='m'?'selected':''}>months</option>
+      <option value="y" ${p&&p.unit==='y'?'selected':''}>years</option>
+    </select>
+    <button onclick="saveCustomRepeat(${t.id})" style="padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;font-size:0.85em">Set</button>
+  </div>`;
+}
+
+function onRepeatChange(sel, taskId) {
+  const customDiv = document.getElementById(`custom-repeat-${taskId}`);
+  if (sel.value === 'custom') {
+    if (customDiv) customDiv.style.display = 'flex';
+  } else {
+    if (customDiv) customDiv.style.display = 'none';
+    patchTask(taskId, { recurrence: sel.value || null });
+  }
+}
+
+function saveCustomRepeat(taskId) {
+  const n = parseInt(document.getElementById(`custom-n-${taskId}`)?.value || '1');
+  const unit = document.getElementById(`custom-unit-${taskId}`)?.value || 'w';
+  if (!n || n < 1) return;
+  // Collapse canonical presets back to named aliases for clarity
+  const recurrence = (n === 1 && unit === 'd') ? '1d'
+    : (n === 1 && unit === 'w') ? '1w'
+    : (n === 1 && unit === 'm') ? '1m'
+    : (n === 1 && unit === 'y') ? '1y'
+    : `${n}${unit}`;
+  patchTask(taskId, { recurrence });
+}
+
 // ── Task actions ─────────────────────────────────────────────────────────────
+function saveDueDate(taskId) {
+  const dateVal = document.getElementById(`due-date-${taskId}`)?.value || '';
+  const timeVal = document.getElementById(`due-time-${taskId}`)?.value || '';
+  const due_date = dateVal ? (timeVal ? `${dateVal}T${timeVal}` : dateVal) : null;
+  patchTask(taskId, { due_date });
+}
+
 async function toggleDone(id) {
   await api('POST', `/api/tasks/${id}/toggle`);
   await refresh();
@@ -1312,21 +1375,39 @@ async function refresh(keepExpanded = false) {
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
+const _REC_ALIASES = {daily:'1d', weekly:'1w', monthly:'1m', yearly:'1y'};
+function parseRecurrence(r) {
+  if (!r) return null;
+  const s = _REC_ALIASES[r] || r;
+  return { n: parseInt(s), unit: s.slice(-1) };
+}
+function fmtRecurrence(r) {
+  const p = parseRecurrence(r);
+  if (!p) return '';
+  const singular = {d:'Daily', w:'Weekly', m:'Monthly', y:'Yearly'};
+  if (p.n === 1) return singular[p.unit] || r;
+  const plural = {d:'days', w:'weeks', m:'months', y:'years'};
+  return `Every ${p.n} ${plural[p.unit] || p.unit}`;
+}
+
 function calcOverdueCycles(t) {
   if (!t.recurrence || !t.due_date || t.done) return 0;
-  const due = new Date(t.due_date + 'T00:00:00');
+  const due = new Date(t.due_date.substring(0, 10) + 'T00:00:00');
   const today = new Date(); today.setHours(0,0,0,0);
   if (due >= today) return 0;
+  const p = parseRecurrence(t.recurrence);
+  if (!p) return 0;
   const days = Math.floor((today - due) / 86400000);
-  if (t.recurrence === 'daily')   return days;
-  if (t.recurrence === 'weekly')  return Math.floor(days / 7);
-  if (t.recurrence === 'monthly') {
+  if (p.unit === 'd') return Math.floor(days / p.n);
+  if (p.unit === 'w') return Math.floor(days / (p.n * 7));
+  if (p.unit === 'm') {
     const m = (today.getFullYear()-due.getFullYear())*12 + (today.getMonth()-due.getMonth());
-    return Math.max(0, today.getDate() < due.getDate() ? m-1 : m);
+    return Math.max(0, Math.floor((today.getDate() < due.getDate() ? m-1 : m) / p.n));
   }
-  if (t.recurrence === 'yearly') {
+  if (p.unit === 'y') {
     const y = today.getFullYear() - due.getFullYear();
-    return Math.max(0, (today.getMonth()<due.getMonth()||(today.getMonth()===due.getMonth()&&today.getDate()<due.getDate())) ? y-1 : y);
+    const behind = today.getMonth()<due.getMonth()||(today.getMonth()===due.getMonth()&&today.getDate()<due.getDate());
+    return Math.max(0, Math.floor((behind ? y-1 : y) / p.n));
   }
   return 0;
 }
@@ -1337,13 +1418,15 @@ function esc(s) {
 
 function fmtDate(d) {
   if (!d) return '';
-  const dt = new Date(d + 'T00:00:00');
+  const hasTime = d.length > 10;
+  const dayDt = new Date(d.substring(0, 10) + 'T00:00:00');
   const today = new Date(); today.setHours(0,0,0,0);
-  const diff = Math.round((dt - today) / 86400000);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  if (diff === -1) return 'Yesterday';
-  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const diff = Math.round((dayDt - today) / 86400000);
+  const dayLabel = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : diff === -1 ? 'Yesterday'
+    : dayDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (!hasTime) return dayLabel;
+  const timePart = new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${dayLabel}, ${timePart}`;
 }
 
 async function doLogout() {

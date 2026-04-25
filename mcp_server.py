@@ -16,10 +16,11 @@ from pathlib import Path
 # ensure db.py is importable from the same directory
 sys.path.insert(0, str(Path(__file__).parent))
 
-import db
+import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-import mcp.types as types
+
+import db
 
 # log to stderr so stdout stays clean for the MCP wire protocol
 logging.basicConfig(
@@ -84,11 +85,11 @@ async def list_tools() -> list[types.Tool]:
                     "title":      {"type": "string"},
                     "list_id":    {"type": "integer", "description": "Defaults to 'Tasks' list (id 3)"},
                     "notes":      {"type": "string"},
-                    "due_date":   {"type": "string", "description": "ISO date string, e.g. 2025-06-01"},
+                    "due_date":   {"type": "string", "description": "Date string: YYYY-MM-DD (date only) or YYYY-MM-DDTHH:MM (with time), e.g. 2025-06-01 or 2025-06-01T09:00"},
                     "priority":   {"type": "string", "enum": ["low", "normal", "high"]},
                     "starred":    {"type": "boolean"},
-                    "recurrence": {"type": "string", "enum": ["daily", "weekly", "monthly", "yearly"],
-                                   "description": "Repeat interval. Requires due_date."},
+                    "recurrence": {"type": "string",
+                                   "description": "Repeat interval. Use Nd/Nw/Nm/Ny (e.g. '1d', '2w', '3m', '1y') or legacy names daily/weekly/monthly/yearly. Requires due_date."},
                 },
                 "required": ["title"],
             },
@@ -123,10 +124,10 @@ async def list_tools() -> list[types.Tool]:
                     "id":         {"type": "integer"},
                     "title":      {"type": "string"},
                     "notes":      {"type": "string"},
-                    "due_date":   {"type": "string"},
+                    "due_date":   {"type": "string", "description": "Date string: YYYY-MM-DD (date only) or YYYY-MM-DDTHH:MM (with time), e.g. 2025-06-01 or 2025-06-01T09:00"},
                     "priority":   {"type": "string", "enum": ["low", "normal", "high"]},
                     "starred":    {"type": "boolean"},
-                    "recurrence": {"type": "string", "enum": ["daily", "weekly", "monthly", "yearly"]},
+                    "recurrence": {"type": "string", "description": "Nd/Nw/Nm/Ny or daily/weekly/monthly/yearly"},
                 },
                 "required": ["id"],
             },
@@ -174,26 +175,55 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     return [types.TextContent(type="text", text=json.dumps(result, default=str))]
 
 
+_RECURRENCE_ALIASES = {"daily": "1d", "weekly": "1w", "monthly": "1m", "yearly": "1y"}
+
+
+def _parse_recurrence(recurrence: str) -> tuple[int, str]:
+    r = _RECURRENCE_ALIASES.get(recurrence, recurrence)
+    return int(r[:-1]), r[-1]
+
+
+def _recurrence_interval(recurrence: str, advance: int) -> str:
+    n, unit = _parse_recurrence(recurrence)
+    total = n * advance
+    if unit == "d":
+        return f"+{total} day"
+    if unit == "w":
+        return f"+{total * 7} day"
+    if unit == "m":
+        return f"+{total} month"
+    return f"+{total} year"
+
+
+def _advance_due_date_sql() -> str:
+    return (
+        "CASE WHEN instr(due_date,'T')>0"
+        " THEN strftime('%Y-%m-%dT%H:%M',due_date,?)"
+        " ELSE date(due_date,?) END"
+    )
+
+
 def _missed_cycles(due_date_str: str, recurrence: str) -> int:
-    due = date.fromisoformat(due_date_str)
+    due = date.fromisoformat(due_date_str[:10])
     today = date.today()
     if today <= due:
         return 0
+    n, unit = _parse_recurrence(recurrence)
     days = (today - due).days
-    if recurrence == "daily":
-        return days
-    if recurrence == "weekly":
-        return days // 7
-    if recurrence == "monthly":
+    if unit == "d":
+        return days // n
+    if unit == "w":
+        return days // (n * 7)
+    if unit == "m":
         months = (today.year - due.year) * 12 + (today.month - due.month)
         if today.day < due.day:
             months -= 1
-        return max(0, months)
-    if recurrence == "yearly":
+        return max(0, months // n)
+    if unit == "y":
         years = today.year - due.year
         if (today.month, today.day) < (due.month, due.day):
             years -= 1
-        return max(0, years)
+        return max(0, years // n)
     return 0
 
 
@@ -262,18 +292,12 @@ def _handle(name: str, args: dict) -> object:
             if row["recurrence"]:
                 missed = _missed_cycles(row["due_date"], row["recurrence"]) if row["due_date"] else 0
                 advance = missed + 1
-                r = row["recurrence"]
-                if r == "daily":
-                    interval = f"+{advance} day"
-                elif r == "weekly":
-                    interval = f"+{advance * 7} day"
-                elif r == "monthly":
-                    interval = f"+{advance} month"
-                else:
-                    interval = f"+{advance} year"
+                interval = _recurrence_interval(row["recurrence"], advance)
                 if row["due_date"]:
-                    conn.execute("UPDATE tasks SET due_date=date(due_date,?) WHERE id=?",
-                                 (interval, args["id"]))
+                    conn.execute(
+                        f"UPDATE tasks SET due_date={_advance_due_date_sql()} WHERE id=?",
+                        (interval, interval, args["id"]),
+                    )
                 conn.execute(
                     "INSERT INTO task_log (task_id, task_title, list_id, list_name, recurrence, due_date, cycles_late)"
                     " VALUES (?,?,?,?,?,?,?)",
@@ -329,17 +353,12 @@ def _handle(name: str, args: dict) -> object:
             list_name = list_row["name"] if list_row else "Unknown"
             missed = _missed_cycles(row["due_date"], row["recurrence"]) if row["due_date"] else 0
             advance = missed + 1
-            r = row["recurrence"]
-            if r == "daily":
-                interval = f"+{advance} day"
-            elif r == "weekly":
-                interval = f"+{advance * 7} day"
-            elif r == "monthly":
-                interval = f"+{advance} month"
-            else:
-                interval = f"+{advance} year"
+            interval = _recurrence_interval(row["recurrence"], advance)
             if row["due_date"]:
-                conn.execute("UPDATE tasks SET due_date=date(due_date,?) WHERE id=?", (interval, args["id"]))
+                conn.execute(
+                    f"UPDATE tasks SET due_date={_advance_due_date_sql()} WHERE id=?",
+                    (interval, interval, args["id"]),
+                )
             conn.execute(
                 "INSERT INTO task_log (task_id, task_title, list_id, list_name, recurrence, due_date, cycles_late, skipped, reason)"
                 " VALUES (?,?,?,?,?,?,?,1,?)",
@@ -350,7 +369,10 @@ def _handle(name: str, args: dict) -> object:
             return db.row_to_dict(conn.execute("SELECT * FROM tasks WHERE id=?", (args["id"],)).fetchone())
 
         if name == "export_db":
-            return db.export_data(conn)
+            row = conn.execute("SELECT id FROM users ORDER BY id LIMIT 1").fetchone()
+            if not row:
+                return {"error": "No users found"}
+            return db.export_data(conn, row["id"])
 
         return {"error": f"Unknown tool: {name}"}
 

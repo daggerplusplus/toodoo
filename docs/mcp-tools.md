@@ -61,13 +61,14 @@ Add a task. New tasks are appended to the end of the list's manual order.
 | title      | string  | yes      |              |
 | list_id    | integer | no       | `3` (Tasks)  |
 | notes      | string  | no       |              |
-| due_date   | string  | no       | ISO-8601 date |
+| due_date   | string  | no       | `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM` |
 | priority   | string  | no       | `"normal"`   |
 | starred    | boolean | no       | `false`      |
 | recurrence | string  | no       | `null`       |
 
 `priority`: `high` | `normal` | `low`
-`recurrence`: `daily` | `weekly` | `monthly` | `yearly`
+`recurrence`: `Nd` / `Nw` / `Nm` / `Ny` where N is a positive integer (e.g. `1d`, `2w`, `14d`, `3m`, `1y`) | `null`
+Legacy aliases `daily`, `weekly`, `monthly`, `yearly` are also accepted (map to `1d`, `1w`, `1m`, `1y`).
 
 ---
 
@@ -90,10 +91,13 @@ Partially update a task's fields.
 | id         | integer | yes      |
 | title      | string  | no       |
 | notes      | string  | no       |
-| due_date   | string  | no       |
+| due_date   | string  | no       | `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM` |
 | priority   | string  | no       |
 | starred    | boolean | no       |
 | recurrence | string  | no       |
+
+`recurrence`: `Nd` / `Nw` / `Nm` / `Ny` where N is a positive integer (e.g. `1d`, `2w`, `14d`, `3m`, `1y`) | `null`
+Legacy aliases `daily`, `weekly`, `monthly`, `yearly` are also accepted (map to `1d`, `1w`, `1m`, `1y`).
 
 ---
 

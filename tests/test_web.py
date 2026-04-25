@@ -322,6 +322,47 @@ def test_toggle_recurring_task_advances_due_date(client, list_id):
     assert body["due_date"] != "2026-04-14"
 
 
+@pytest.mark.parametrize("recurrence,due_date,expected_due", [
+    # 2w → advances by 14 days from 2026-04-14
+    ("2w",  "2026-04-14", "2026-04-28"),
+    # 14d → same as 2w
+    ("14d", "2026-04-14", "2026-04-28"),
+    # 3m → advances by 3 months
+    ("3m",  "2026-04-14", "2026-07-14"),
+    # 2y → advances by 2 years
+    ("2y",  "2026-04-14", "2028-04-14"),
+])
+def test_toggle_custom_recurrence_advances_due_date_correctly(client, list_id, recurrence, due_date, expected_due):
+    r = client.post(f"/api/lists/{list_id}/tasks", json={
+        "title": f"Custom recur {recurrence}",
+        "due_date": due_date,
+        "recurrence": recurrence,
+    })
+    task_id = r.json()["id"]
+    r = client.post(f"/api/tasks/{task_id}/toggle")
+    body = r.json()
+    assert body["done"] == 0
+    assert body["due_date"] == expected_due
+
+
+@pytest.mark.parametrize("recurrence,due_date,expected_due", [
+    ("2w",  "2026-04-14", "2026-04-28"),
+    ("14d", "2026-04-14", "2026-04-28"),
+    ("3m",  "2026-04-14", "2026-07-14"),
+])
+def test_skip_custom_recurrence_advances_due_date_correctly(client, list_id, recurrence, due_date, expected_due):
+    r = client.post(f"/api/lists/{list_id}/tasks", json={
+        "title": f"Skip custom {recurrence}",
+        "due_date": due_date,
+        "recurrence": recurrence,
+    })
+    task_id = r.json()["id"]
+    r = client.post(f"/api/tasks/{task_id}/skip", json={})
+    body = r.json()
+    assert body["done"] == 0
+    assert body["due_date"] == expected_due
+
+
 # ---------------------------------------------------------------------------
 # Log
 # ---------------------------------------------------------------------------
@@ -469,6 +510,35 @@ def test_add_task_sort_order_increments(client, list_id):
     t1 = client.post(f"/api/lists/{list_id}/tasks", json={"title": "SO1"}).json()
     t2 = client.post(f"/api/lists/{list_id}/tasks", json={"title": "SO2"}).json()
     assert t2["sort_order"] > t1["sort_order"]
+
+
+# ---------------------------------------------------------------------------
+# Datetime due_date (YYYY-MM-DDTHH:MM)
+# ---------------------------------------------------------------------------
+
+def test_create_task_with_datetime_due_date(client, list_id):
+    r = client.post(f"/api/lists/{list_id}/tasks", json={
+        "title": "Timed task",
+        "due_date": "2099-06-01T14:30",
+    })
+    assert r.status_code == 201
+    body = r.json()
+    assert body["due_date"] == "2099-06-01T14:30"
+
+
+def test_toggle_recurring_task_with_datetime_preserves_time(client, list_id):
+    r = client.post(f"/api/lists/{list_id}/tasks", json={
+        "title": "Timed recurring",
+        "due_date": "2026-04-14T14:30",
+        "recurrence": "weekly",
+    })
+    task_id = r.json()["id"]
+    r = client.post(f"/api/tasks/{task_id}/toggle")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["done"] == 0
+    assert "T14:30" in body["due_date"]
+    assert body["due_date"] != "2026-04-14T14:30"
 
 
 # ---------------------------------------------------------------------------

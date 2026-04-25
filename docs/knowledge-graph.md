@@ -53,7 +53,7 @@ Entities, their attributes, and relationships in this codebase — structured fo
 - **columns:** id, list_id (CASCADE), title, notes, due_date, priority, done, starred, sort_order, recurrence, created_at, completed_at
 - **sort_order:** manual position within list; new tasks get `MAX(sort_order)+1`
 - **priority_values:** high | normal | low
-- **recurrence_values:** daily | weekly | monthly | yearly | null
+- **recurrence_values:** `Nd` / `Nw` / `Nm` / `Ny` (N is a positive integer; e.g. `1d`, `2w`, `3m`, `1y`) | `null`; legacy aliases `daily/weekly/monthly/yearly` map to `1d/1w/1m/1y`
 
 ### Table: task_log
 - **columns:** id, task_id (soft), task_title, list_id (soft), list_name, recurrence, due_date, cycles_late, skipped (0/1), reason, completed_at
@@ -94,7 +94,8 @@ tasks           --logs to-->    task_log           (soft ref; history survives d
 | Invites expire after 7 days and are single-use | `_valid_invite()` in web.py |
 | A user sees a list iff `list_members` has a row for them | `_member_list()` in web.py |
 | Owner-only operations (delete list, manage members, reorder, patch) use `_own_list()` | web.py |
-| Recurring task toggle/skip advances `due_date` by `missed+1` cycles; task stays undone | `toggle_task()`, `skip_task()` in web.py |
+| Recurring task toggle/skip advances `due_date` by `missed+1` cycles; task stays undone; recurrence format is `Nd/Nw/Nm/Ny` (e.g. `2w`, `14d`); legacy aliases `daily/weekly/monthly/yearly` map to `1d/1w/1m/1y` | `toggle_task()`, `skip_task()` in web.py |
+| `due_date` accepts `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`; recurring advance preserves time component if present | `toggle_task()`, `skip_task()` in web.py |
 | `cycles_late` = periods elapsed since `due_date` before action | `_missed_cycles()` in web.py |
 | Non-recurring task toggle sets `done=1` + `completed_at` | `toggle_task()` in web.py |
 | Undo (toggle when `done=1`) clears `done` and `completed_at`, no log entry | `toggle_task()` in web.py |

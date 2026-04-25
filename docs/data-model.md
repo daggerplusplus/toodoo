@@ -50,12 +50,12 @@ PK  id            INTEGER  AUTOINCREMENT
 FK  list_id       INTEGER  NOT NULL  → lists.id  ON DELETE CASCADE
     title         TEXT     NOT NULL
     notes         TEXT
-    due_date      TEXT                            (ISO-8601 date string)
+    due_date      TEXT                            (YYYY-MM-DD or YYYY-MM-DDTHH:MM)
     priority      TEXT     NOT NULL  DEFAULT 'normal'
     done          INTEGER  NOT NULL  DEFAULT 0    (0|1)
     starred       INTEGER  NOT NULL  DEFAULT 0    (0|1)
     sort_order    INTEGER  NOT NULL  DEFAULT 0
-    recurrence    TEXT                            (daily|weekly|monthly|yearly)
+    recurrence    TEXT                            (Nd|Nw|Nm|Ny, e.g. 1d, 2w, 3m, 1y; or legacy aliases daily|weekly|monthly|yearly)
     created_at    TEXT     NOT NULL  DEFAULT datetime('now')
     completed_at  TEXT                            (set when done=1; cleared on undo)
 
@@ -105,7 +105,7 @@ tasks       ──< task_log      (soft ref; log survives task deletion)
 - All datetime columns are ISO-8601 `TEXT` — SQLite `date()` / `datetime()` functions work on them.
 - `done`, `starred`, `is_admin`, `skipped` are stored as `0`/`1` integers (no boolean type in SQLite).
 - `priority` valid values: `high`, `normal`, `low` — enforced by application, not a CHECK constraint.
-- `recurrence` valid values: `daily`, `weekly`, `monthly`, `yearly`, `NULL` — application enforced.
+- `recurrence` valid values: `Nd` / `Nw` / `Nm` / `Ny` where N is a positive integer (e.g. `1d`, `2w`, `14d`, `3m`, `1y`), or `NULL` — application enforced. Legacy aliases `daily`, `weekly`, `monthly`, `yearly` are accepted and map to `1d`, `1w`, `1m`, `1y` respectively.
 - `list_members` is the authority for list visibility: a user sees a list iff there is a matching row.
 - `sort_order` starts at 0 for all existing rows. New tasks created via API get `MAX(sort_order) + 1`.
 

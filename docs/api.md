@@ -139,8 +139,10 @@ New tasks get `sort_order = MAX(existing) + 1`, appending them to the bottom of 
   "starred": false, "recurrence": "weekly"
 }
 ```
+`due_date`: `YYYY-MM-DD` (date only) or `YYYY-MM-DDTHH:MM` (date + time)
 `priority`: `high` | `normal` | `low`
-`recurrence`: `daily` | `weekly` | `monthly` | `yearly` | `null`
+`recurrence`: `Nd` / `Nw` / `Nm` / `Ny` where N is a positive integer (e.g. `1d`, `2w`, `3m`, `1y`) | `null`
+Legacy aliases `daily`, `weekly`, `monthly`, `yearly` are also accepted (map to `1d`, `1w`, `1m`, `1y`).
 
 **Response** `201` | `404`
 
