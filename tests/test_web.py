@@ -488,6 +488,21 @@ def test_patch_list_clear_category(client):
     assert r.json()["category_id"] is None
 
 
+def test_patch_list_rename(client):
+    list_id = client.post("/api/lists", json={"name": "OldListName"}).json()["id"]
+    r = client.patch(f"/api/lists/{list_id}", json={"name": "NewListName"})
+    assert r.status_code == 200
+    assert r.json()["name"] == "NewListName"
+    names = [l["name"] for l in client.get("/api/lists").json()]
+    assert "NewListName" in names
+    assert "OldListName" not in names
+
+
+def test_patch_list_not_found(client):
+    r = client.patch("/api/lists/99999", json={"name": "Ghost"})
+    assert r.status_code == 404
+
+
 def test_reorder_lists(client):
     a = client.post("/api/lists", json={"name": "RLA"}).json()["id"]
     b = client.post("/api/lists", json={"name": "RLB"}).json()["id"]
