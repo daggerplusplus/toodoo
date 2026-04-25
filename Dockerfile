@@ -9,9 +9,7 @@ COPY . .
 
 RUN mkdir -p /data
 ENV TODO_DB=/data/todo.db
-ENV HOST=0.0.0.0
-ENV PORT=8001
 
 EXPOSE 8001
 
-CMD uvicorn web:app --host $HOST --port $PORT
+CMD uvicorn web:app --host 0.0.0.0 --port 8001

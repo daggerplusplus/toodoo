@@ -1,21 +1,17 @@
 services:
   web:
     image: ghcr.io/daggerplusplus/toodoo:latest
+    container_name: Toodoo
     # build: .   # uncomment to build locally instead
     ports:
-      - "${PORT:-8001}:${PORT:-8001}"
+      - "${PORT:-8001}:8001"
     volumes:
-      - toodoo-data:/data
+      - ${DATA_DIR:-./data}:/data
     environment:
       TODO_DB: /data/todo.db
-      HOST: 0.0.0.0
-      PORT: 8001
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
-
-volumes:
-  toodoo-data:
