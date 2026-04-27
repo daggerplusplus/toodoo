@@ -251,7 +251,7 @@ def test_clear_completed_list_not_found(client):
 def test_skip_recurring_task_advances_due_date(client, list_id):
     r = client.post(f"/api/lists/{list_id}/tasks", json={
         "title": "Skip me",
-        "due_date": "2026-04-14",
+        "due_date": "2099-06-01",
         "recurrence": "weekly",
     })
     task_id = r.json()["id"]
@@ -259,13 +259,13 @@ def test_skip_recurring_task_advances_due_date(client, list_id):
     assert r.status_code == 200
     body = r.json()
     assert body["done"] == 0
-    assert body["due_date"] != "2026-04-14"
+    assert body["due_date"] != "2099-06-01"
 
 
 def test_skip_logs_to_activity_log_with_skipped_flag(client, list_id):
     r = client.post(f"/api/lists/{list_id}/tasks", json={
         "title": "Skip logged",
-        "due_date": "2026-04-14",
+        "due_date": "2099-06-01",
         "recurrence": "daily",
     })
     task_id = r.json()["id"]
@@ -280,7 +280,7 @@ def test_skip_logs_to_activity_log_with_skipped_flag(client, list_id):
 def test_skip_without_reason(client, list_id):
     r = client.post(f"/api/lists/{list_id}/tasks", json={
         "title": "Skip no reason",
-        "due_date": "2026-04-14",
+        "due_date": "2099-06-01",
         "recurrence": "daily",
     })
     task_id = r.json()["id"]
@@ -311,7 +311,7 @@ def test_skip_task_not_found(client):
 def test_toggle_recurring_task_advances_due_date(client, list_id):
     r = client.post(f"/api/lists/{list_id}/tasks", json={
         "title": "Weekly chore",
-        "due_date": "2026-04-14",
+        "due_date": "2099-06-01",
         "recurrence": "weekly",
     })
     task_id = r.json()["id"]
@@ -319,18 +319,16 @@ def test_toggle_recurring_task_advances_due_date(client, list_id):
     body = r.json()
     # recurring tasks stay undone and get their due date advanced
     assert body["done"] == 0
-    assert body["due_date"] != "2026-04-14"
+    assert body["due_date"] != "2099-06-01"
 
 
 @pytest.mark.parametrize("recurrence,due_date,expected_due", [
-    # 2w → advances by 14 days from 2026-04-14
-    ("2w",  "2026-04-14", "2026-04-28"),
-    # 14d → same as 2w
-    ("14d", "2026-04-14", "2026-04-28"),
-    # 3m → advances by 3 months
-    ("3m",  "2026-04-14", "2026-07-14"),
-    # 2y → advances by 2 years
-    ("2y",  "2026-04-14", "2028-04-14"),
+    # Use a far-future due date so the task is never "overdue" when tests run.
+    # missed=0, advance=1 → new_due = due_date + 1 cycle.
+    ("2w",  "2099-01-01", "2099-01-15"),
+    ("14d", "2099-01-01", "2099-01-15"),
+    ("3m",  "2099-01-01", "2099-04-01"),
+    ("2y",  "2099-01-01", "2101-01-01"),
 ])
 def test_toggle_custom_recurrence_advances_due_date_correctly(client, list_id, recurrence, due_date, expected_due):
     r = client.post(f"/api/lists/{list_id}/tasks", json={
@@ -346,9 +344,9 @@ def test_toggle_custom_recurrence_advances_due_date_correctly(client, list_id, r
 
 
 @pytest.mark.parametrize("recurrence,due_date,expected_due", [
-    ("2w",  "2026-04-14", "2026-04-28"),
-    ("14d", "2026-04-14", "2026-04-28"),
-    ("3m",  "2026-04-14", "2026-07-14"),
+    ("2w",  "2099-01-01", "2099-01-15"),
+    ("14d", "2099-01-01", "2099-01-15"),
+    ("3m",  "2099-01-01", "2099-04-01"),
 ])
 def test_skip_custom_recurrence_advances_due_date_correctly(client, list_id, recurrence, due_date, expected_due):
     r = client.post(f"/api/lists/{list_id}/tasks", json={
@@ -544,7 +542,7 @@ def test_create_task_with_datetime_due_date(client, list_id):
 def test_toggle_recurring_task_with_datetime_preserves_time(client, list_id):
     r = client.post(f"/api/lists/{list_id}/tasks", json={
         "title": "Timed recurring",
-        "due_date": "2026-04-14T14:30",
+        "due_date": "2099-06-01T14:30",
         "recurrence": "weekly",
     })
     task_id = r.json()["id"]
@@ -553,7 +551,7 @@ def test_toggle_recurring_task_with_datetime_preserves_time(client, list_id):
     body = r.json()
     assert body["done"] == 0
     assert "T14:30" in body["due_date"]
-    assert body["due_date"] != "2026-04-14T14:30"
+    assert body["due_date"] != "2099-06-01T14:30"
 
 
 # ---------------------------------------------------------------------------

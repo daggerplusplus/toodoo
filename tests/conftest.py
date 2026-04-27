@@ -14,6 +14,12 @@ def tmp_db():
 
 
 @pytest.fixture
+def list_id(client):
+    r = client.post("/api/lists", json={"name": "Test List"})
+    return r.json()["id"]
+
+
+@pytest.fixture
 def client(tmp_db):
     import db as db_module
     db_module.DB_PATH = tmp_db

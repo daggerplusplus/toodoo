@@ -559,6 +559,29 @@ def _missed_cycles(due_date_str: str, recurrence: str) -> int:
     return 0
 
 
+def _advance_count(due_date_str: str, recurrence: str) -> int:
+    """Cycles to advance from due_date so the new due date lands on today or later.
+
+    For day/week intervals: ceiling division ensures the result is the earliest
+    scheduled occurrence on or after today (not always +1 past today).
+    For month/year intervals: falls back to missed+1 since calendar months aren't
+    fixed-length days.
+    """
+    due = date.fromisoformat(due_date_str[:10])
+    today = date.today()
+    if today <= due:
+        return 1
+    n, unit = _parse_recurrence(recurrence)
+    days = (today - due).days
+    if unit == "d":
+        interval = n
+        return (days + interval - 1) // interval  # ceil(days / interval)
+    if unit == "w":
+        interval = n * 7
+        return (days + interval - 1) // interval
+    return _missed_cycles(due_date_str, recurrence) + 1
+
+
 @app.post("/api/tasks/{task_id}/toggle")
 def toggle_task(request: Request, task_id: int):
     uid = _uid(request)
@@ -569,7 +592,8 @@ def toggle_task(request: Request, task_id: int):
 
         if not row["done"] and row["recurrence"]:
             missed = _missed_cycles(row["due_date"], row["recurrence"]) if row["due_date"] else 0
-            interval = _recurrence_interval(row["recurrence"], missed + 1)
+            advance = _advance_count(row["due_date"], row["recurrence"]) if row["due_date"] else 1
+            interval = _recurrence_interval(row["recurrence"], advance)
             if row["due_date"]:
                 conn.execute(
                     f"UPDATE tasks SET due_date={_advance_due_date_sql()} WHERE id=?",
@@ -622,7 +646,8 @@ def skip_task(request: Request, task_id: int, body: SkipBody):
         list_row = conn.execute("SELECT name FROM lists WHERE id=?", (row["list_id"],)).fetchone()
         list_name = list_row["name"] if list_row else "Unknown"
         missed = _missed_cycles(row["due_date"], row["recurrence"]) if row["due_date"] else 0
-        interval = _recurrence_interval(row["recurrence"], missed + 1)
+        advance = _advance_count(row["due_date"], row["recurrence"]) if row["due_date"] else 1
+        interval = _recurrence_interval(row["recurrence"], advance)
         if row["due_date"]:
             conn.execute(
                 f"UPDATE tasks SET due_date={_advance_due_date_sql()} WHERE id=?",

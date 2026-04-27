@@ -227,6 +227,22 @@ def _missed_cycles(due_date_str: str, recurrence: str) -> int:
     return 0
 
 
+def _advance_count(due_date_str: str, recurrence: str) -> int:
+    due = date.fromisoformat(due_date_str[:10])
+    today = date.today()
+    if today <= due:
+        return 1
+    n, unit = _parse_recurrence(recurrence)
+    days = (today - due).days
+    if unit == "d":
+        interval = n
+        return (days + interval - 1) // interval
+    if unit == "w":
+        interval = n * 7
+        return (days + interval - 1) // interval
+    return _missed_cycles(due_date_str, recurrence) + 1
+
+
 def _handle(name: str, args: dict) -> object:
     conn = db.get_conn()
     try:
@@ -291,7 +307,7 @@ def _handle(name: str, args: dict) -> object:
 
             if row["recurrence"]:
                 missed = _missed_cycles(row["due_date"], row["recurrence"]) if row["due_date"] else 0
-                advance = missed + 1
+                advance = _advance_count(row["due_date"], row["recurrence"]) if row["due_date"] else 1
                 interval = _recurrence_interval(row["recurrence"], advance)
                 if row["due_date"]:
                     conn.execute(
@@ -352,7 +368,7 @@ def _handle(name: str, args: dict) -> object:
             list_row = conn.execute("SELECT name FROM lists WHERE id=?", (row["list_id"],)).fetchone()
             list_name = list_row["name"] if list_row else "Unknown"
             missed = _missed_cycles(row["due_date"], row["recurrence"]) if row["due_date"] else 0
-            advance = missed + 1
+            advance = _advance_count(row["due_date"], row["recurrence"]) if row["due_date"] else 1
             interval = _recurrence_interval(row["recurrence"], advance)
             if row["due_date"]:
                 conn.execute(
