@@ -139,6 +139,15 @@ def init_db() -> None:
                 SELECT id, user_id FROM lists WHERE user_id IS NOT NULL
             """)
 
+        # Token table for Electron desktop client
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS api_tokens (
+                user_id INTEGER PRIMARY KEY,
+                token   TEXT    NOT NULL UNIQUE,
+                created_at TEXT  NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+
 
 def get_session_secret() -> str:
     with get_conn() as conn:
@@ -149,6 +158,34 @@ def get_session_secret() -> str:
         conn.execute("INSERT INTO settings (key, value) VALUES ('session_secret', ?)", (val,))
         conn.commit()
         return val
+
+
+def get_or_create_token(conn: sqlite3.Connection, user_id: int) -> str:
+    """Return existing API token or create a new one for the user."""
+    row = conn.execute(
+        "SELECT token FROM api_tokens WHERE user_id=?", (user_id,)
+    ).fetchone()
+    if row:
+        return row["token"]
+    tok = secrets.token_hex(20)
+    conn.execute(
+        "INSERT INTO api_tokens (user_id, token) VALUES (?,?)", (user_id, tok)
+    )
+    conn.commit()
+    return tok
+
+
+def revoke_token(conn: sqlite3.Connection, user_id: int) -> None:
+    conn.execute("DELETE FROM api_tokens WHERE user_id=?", (user_id,))
+    conn.commit()
+
+
+def verify_token(conn: sqlite3.Connection, tok: str) -> int | None:
+    """Return user_id if token is valid, else None."""
+    row = conn.execute(
+        "SELECT user_id FROM api_tokens WHERE token=?", (tok,)
+    ).fetchone()
+    return row["user_id"] if row else None
 
 
 def user_count(conn: sqlite3.Connection) -> int:

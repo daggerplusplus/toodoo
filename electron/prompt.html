@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f4f0;color:#1a1917}
+  .card{background:#fff;border:1px solid #e5e4e0;border-radius:12px;padding:28px;width:320px;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+  h2{margin:0 0 16px;font-size:18px}
+  input{width:100%;padding:8px 10px;border:1px solid #e5e4e0;border-radius:6px;font-size:14px;box-sizing:border-box}
+  button{width:100%;margin-top:12px;padding:8px;background:#4f7ef8;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer}
+  button:hover{background:#3b6be0}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>Server URL</h2>
+    <input id="server" autofocus placeholder="http://192.168.1.100:8001">
+    <button id="ok">OK</button>
+  </div>
+  <script>
+    document.getElementById('ok').onclick = () => {
+      const url = document.getElementById('server').value.trim();
+      if (url) require('electron').ipcRenderer.send('server-url', url);
+    };
+  </script>
+</body>
+</html>

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -37,17 +38,40 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Toodoo", version="0.1.0", lifespan=lifespan)
 
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
+
 # auth_middleware must be registered before SessionMiddleware so that
 # Starlette's reversed build order places SessionMiddleware outermost (runs first).
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path in ("/login", "/logout", "/register") or path == "/api/health":
+    if path in ("/login", "/logout", "/register", "/electron-login") or path == "/api/health":
         return await call_next(request)
-    if not request.session.get("user_id"):
+    if path == "/api/electron-login":
+        return await call_next(request)
+        return await call_next(request)
+    uid = None
+    # 1. Check Bearer token (for Electron client)
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        with db.get_conn() as conn:
+            uid = db.verify_token(conn, token)
+    # 2. Fall back to session cookie (for web browser)
+    if not uid:
+        uid = request.session.get("user_id")
+    if not uid:
         if path.startswith("/api/"):
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return RedirectResponse("/login")
+    request.state.user_id = uid
     return await call_next(request)
 
 
@@ -65,7 +89,9 @@ app.add_middleware(
 
 
 def _uid(request: Request) -> int:
-    uid = request.session.get("user_id")
+    uid = getattr(request.state, "user_id", None)
+    if not uid:
+        uid = request.session.get("user_id")
     if not uid:
         raise HTTPException(401, "Not authenticated")
     return uid
@@ -177,6 +203,10 @@ class ListPatch(BaseModel):
     name: str | None = None
     icon: str | None = None
 
+class ElectronLoginBody(BaseModel):
+    username: str
+    pwd: str
+
 
 # ---------------------------------------------------------------------------
 # Health
@@ -186,6 +216,41 @@ class ListPatch(BaseModel):
 @app.get("/api/health")
 def health():
     return {"status": "ok", "auth": True}
+
+
+# ---------------------------------------------------------------------------
+# Electron client auth
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/electron-login")
+async def electron_login(request: Request, body: ElectronLoginBody):
+    username = body.username.strip()
+    pwd_val = body.pwd
+    with db.get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=?", (username,)
+        ).fetchone()
+    if row and db.verify_pw(pwd_val, row["pw_hash"]):
+        tok = db.get_or_create_token(conn, row["id"])
+        return {"token": tok, "user_id": row["id"], "username": row["username"]}
+    raise HTTPException(401, "Invalid credentials")
+
+
+@app.post("/api/api-key")
+def create_api_key(request: Request):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        tok = db.get_or_create_token(conn, uid)
+    return {"token": tok}
+
+
+@app.delete("/api/api-key")
+def delete_api_key(request: Request):
+    uid = _uid(request)
+    with db.get_conn() as conn:
+        db.revoke_token(conn, uid)
+    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------------------
@@ -783,6 +848,11 @@ def serve_ui():
 @app.get("/login", response_class=HTMLResponse)
 def login_page():
     return HTMLResponse((_static / "login.html").read_text(encoding="utf-8"))
+
+
+@app.get("/electron-login", response_class=HTMLResponse)
+def electron_login_page():
+    return HTMLResponse((_static / "electron-login.html").read_text(encoding="utf-8"))
 
 
 @app.post("/login")

@@ -1,0 +1,13 @@
+{
+  "name": "toodoo",
+  "version": "0.1.0",
+  "description": "Toodoo Desktop",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
