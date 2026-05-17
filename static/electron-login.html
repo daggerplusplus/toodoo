@@ -42,6 +42,8 @@ button[type=submit]{
 button[type=submit]:hover{background:#3b6be0;}
 button[type=submit]:disabled{opacity:.6;cursor:wait;}
 .server-field{margin-bottom:12px;}
+.spinner{display:none;margin:16px auto;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -53,6 +55,7 @@ button[type=submit]:disabled{opacity:.6;cursor:wait;}
     Toodoo
   </div>
   <div class="error" id="error-msg">Invalid credentials.</div>
+  <div class="spinner" id="spinner"></div>
   <form method="post" id="login-form">
     <div class="server-field">
       <label for="server">Server URL</label>
@@ -73,21 +76,41 @@ const form = document.getElementById('login-form');
 const serverInput = document.getElementById('server');
 const errorMsg = document.getElementById('error-msg');
 const submitBtn = document.getElementById('submit-btn');
+const spinner = document.getElementById('spinner');
 
 serverInput.value = localStorage.getItem('toodoo_server_url') || '';
+
+// Auto-login if we have a saved token
+(async function checkAutoLogin() {
+  const token = localStorage.getItem('toodoo_api_token');
+  const serverUrl = localStorage.getItem('toodoo_server_url');
+  if (token && serverUrl) {
+    try {
+      const res = await fetch(serverUrl + '/api/me', {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (res.ok) {
+        window.location.href = './';
+        return;
+      }
+    } catch {}
+  }
+  // Show the login form since auto-login failed
+  errorMsg.style.display = 'none';
+})();
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const serverUrl = serverInput.value.replace(/\/+$/, '');
   const username = document.getElementById('un').value;
-  const pw = document.getElementById('pw').value;
+  const pwVal = document.getElementById('pw').value;
 
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Signing in...';
+  submitBtn.style.display = 'none';
+  spinner.style.display = 'block';
   errorMsg.classList.remove('visible');
 
   try {
-    const loginPayload = { username: username, pwd: pw };
+    const loginPayload = { username: username, pwd: pwVal };
     const res = await fetch(serverUrl + '/api/electron-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -97,17 +120,23 @@ form.addEventListener('submit', async (e) => {
       const data = await res.json();
       localStorage.setItem('toodoo_api_token', data.token);
       localStorage.setItem('toodoo_server_url', serverUrl);
+      // Notify main process for Electron
+      try {
+        const { ipcRenderer } = window.require('electron');
+        ipcRenderer.send('electron-login-success', { token: data.token });
+      } catch {}
       window.location.href = './';
     } else {
       errorMsg.textContent = 'Invalid credentials.';
       errorMsg.classList.add('visible');
+      submitBtn.style.display = 'block';
+      spinner.style.display = 'none';
     }
   } catch (err) {
     errorMsg.textContent = 'Cannot reach server. Check the URL.';
     errorMsg.classList.add('visible');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Sign in';
+    submitBtn.style.display = 'block';
+    spinner.style.display = 'none';
   }
 });
 </script>

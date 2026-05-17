@@ -5,19 +5,28 @@ const fs = require('fs');
 const PROMPT_HTML = path.join(__dirname, 'prompt.html');
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 
-function loadServerUrl() {
+function loadConfig() {
   try {
     const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
-    const config = JSON.parse(raw);
-    return config.serverUrl || '';
+    return JSON.parse(raw);
   } catch {
-    return '';
+    return { serverUrl: '', token: '' };
   }
 }
 
-function saveServerUrl(url) {
-  const config = { serverUrl: url };
+function saveConfig(config) {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+async function verifyToken(serverUrl, token) {
+  try {
+    const res = await fetch(serverUrl + '/api/me', {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 function promptServerUrl() {
@@ -52,7 +61,8 @@ function promptServerUrl() {
 }
 
 async function createWindow() {
-  let serverUrl = loadServerUrl();
+  let config = loadConfig();
+  let serverUrl = config.serverUrl || '';
 
   if (!serverUrl) {
     serverUrl = await promptServerUrl();
@@ -60,7 +70,6 @@ async function createWindow() {
       app.quit();
       return;
     }
-    saveServerUrl(serverUrl);
   }
 
   // Normalize: remove trailing slash
@@ -78,8 +87,24 @@ async function createWindow() {
     },
   });
 
+  // Try to auto-login with saved token
+  if (config.token) {
+    const valid = await verifyToken(serverUrl, config.token);
+    if (valid) {
+      win.loadURL(serverUrl + '/');
+      win.show();
+      return;
+    }
+  }
+
+  // Show login page, then store the token after successful login
   win.loadURL(serverUrl + '/electron-login');
   win.show();
+
+  // Listen for the login page to report a successful login
+  ipcMain.on('electron-login-success', (_event, data) => {
+    saveConfig({ serverUrl, token: data.token });
+  });
 }
 
 app.whenReady().then(createWindow);
