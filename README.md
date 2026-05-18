@@ -11,6 +11,7 @@ A self-hosted personal todo app with multi-user support, shared lists, and a Cla
 - **Dark mode** — follows system preference
 - **Mobile-friendly** — responsive layout with collapsible sidebar
 - **MCP server** — lets Claude manage your todos directly via the Model Context Protocol
+- **Electron desktop app** — installable Windows client with persistent auto-login
 - **No external services** — SQLite database, no email, no cloud dependencies
 
 ## Quick Start (Docker)
@@ -76,6 +77,46 @@ Toodoo includes an MCP server that lets Claude read and manage your todos. To us
 ```
 
 Available tools: `list_lists`, `create_list`, `list_tasks`, `add_task`, `complete_task`, `update_task`, `delete_task`, `skip_task`, `list_log`, `export_db`.
+
+## Electron Desktop App
+
+A lightweight, installable Windows desktop client that connects to your Toodoo server. The Electron app is a **thin client** — it does not run its own backend, it loads the web UI from your server in a native window.
+
+### Prerequisites
+
+- A running Toodoo server (Docker or local)
+- Node.js 18+ installed locally (for building/installing the desktop app)
+
+### Setup
+
+```bash
+cd electron          # or wherever the electron folder lives
+npm install
+```
+
+### Running
+
+```bash
+npm start
+```
+
+On first launch, you'll be prompted to enter the URL of your Toodoo server. The app connects to it and loads the same web UI in a native window.
+
+### Auto-login
+
+The app saves your server URL and API token to disk (`%APPDATA%\Toodoo\config.json`). On subsequent launches it verifies the saved token and logs in automatically — no need to enter credentials each time.
+
+### Installing as a Windows App
+
+Build an NSIS installer:
+
+```bash
+npm run build
+```
+
+This produces a Windows installer in `dist/` that you can run to install Toodoo as a regular app with a Start Menu shortcut and desktop icon.
+
+Configuration: `electron-builder.json` — change `appId`, `productName`, or target platform as needed.
 
 ## Tech Stack
 

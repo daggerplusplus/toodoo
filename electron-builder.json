@@ -12,6 +12,11 @@
     "target": "nsis",
     "icon": null
   },
+  "linux": {
+    "target": "AppImage",
+    "icon": null,
+    "category": "Utility"
+  },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
